@@ -1,8 +1,5 @@
 __author__ = 'jgarman'
 
-import requests
-import psycopg2
-import paramiko
 import os
 import sys
 import argparse
@@ -10,7 +7,6 @@ import re
 from ssh_connection import SSHInputSource, SSHOutputSink
 from transporter import Transporter, DataAnonymizer
 from file_connection import FileInputSource, FileOutputSink
-from testing import DummyOutputSink
 
 def main():
     parser = argparse.ArgumentParser(description="Transfer data from one Cb server to another")
@@ -44,16 +40,14 @@ def main():
         input_source = SSHInputSource(username=source_parts.group(1), hostname=source_parts.group(2),
                                       port=port_number, private_key=options.key, query=options.query)
 
-    output_sink = DummyOutputSink()
-
-    # if not destination_parts:
-    #     output_sink = FileOutputSink(options.destination)
-    # else:
-    #     port_number = 22
-    #     if destination_parts.group(4):
-    #         port_number = destination_parts.group(4)
-    #     output_sink = SSHOutputSink(username=destination_parts.group(1), hostname=destination_parts.group(2),
-    #                                 port=port_number, private_key=options.key)
+    if not destination_parts:
+        output_sink = FileOutputSink(options.destination)
+    else:
+        port_number = 22
+        if destination_parts.group(4):
+            port_number = destination_parts.group(4)
+        output_sink = SSHOutputSink(username=destination_parts.group(1), hostname=destination_parts.group(2),
+                                    port=port_number, private_key=options.key)
 
     t = Transporter(input_source, output_sink)
 
@@ -62,5 +56,6 @@ def main():
 
     t.transport(debug=options.verbose)
 
+# TODO: add exception wrapper so we clean up after ourselves if there's an error
 if __name__ == '__main__':
     sys.exit(main())

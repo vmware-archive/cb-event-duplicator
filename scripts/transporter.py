@@ -1,10 +1,14 @@
 __author__ = 'jgarman'
 
 import logging
+from utils import get_process_id, get_parent_process_id
 
 log = logging.getLogger(__name__)
 
 class Transporter(object):
+    # TODO: add check for input and output Cb version before executing
+    # - this data is found in the file /usr/share/cb/VERSION
+
     def __init__(self, input_source, output_sink):
         self.input_md5set = set()
         self.output_md5set = set()
@@ -20,28 +24,6 @@ class Transporter(object):
         # map source sensor_id to hostname
         self.sensor_map = dict()
 
-    @staticmethod
-    def get_process_id(proc):
-        old_style_id = proc.get('id', None)
-        if old_style_id and old_style_id != '':
-            return old_style_id
-        else:
-            new_style_id = proc.get('unique_id', None)
-            if not new_style_id:
-                log.warn("Process has no unique_id")
-            return new_style_id
-
-    @staticmethod
-    def get_parent_process_id(proc):
-        old_style_id = proc.get('parent_id', None)
-        if old_style_id and old_style_id != '':
-            return old_style_id
-        else:
-            new_style_id = proc.get('parent_unique_id', None)
-            if not new_style_id:
-                log.warn("Process has no parent_unique_id")
-            return new_style_id
-
     def add_anonymizer(self, munger):
         self.mungers.append(munger)
 
@@ -51,17 +33,25 @@ class Transporter(object):
 
         self.output.output_process_doc(doc)
 
+    def output_binary_doc(self, doc):
+        for munger in self.mungers:
+            doc = munger.munge_document('binary', doc)
+
+        self.output.output_binary_doc(doc)
+
+    def output_sensor_info(self, doc):
+        self.output.output_sensor_info(doc)
+
     def update_sensors(self, proc):
         sensor_id = proc.get('sensor_id', 0)
         if not sensor_id:
             return []
 
         if sensor_id and sensor_id not in self.sensor_map:
-            # new sensor, get the data from postgresql
-            self.input.get_sensor_info(id=sensor_id)
-            # add to our sensor_maps
             # notify caller that this sensor_id has to be inserted into the target
             return [sensor_id]
+
+        return []
 
     def update_md5sums(self, proc):
         md5s = set()
@@ -70,8 +60,8 @@ class Transporter(object):
             fields = modload_complete.split('|')
             md5s.add(fields[1])
 
-        retval = md5s = self.input_md5set
-        self.input_md5set.union(retval)
+        retval = md5s - self.input_md5set
+        self.input_md5set |= md5s
         return retval
 
     def get_process_docs(self):
@@ -79,18 +69,41 @@ class Transporter(object):
         for proc in self.input.get_process_docs():
             yield proc
 
+    def update_sensor_info(self, sensor_id):
+        # FIXME: this will merge multiple sensors with the same hostname together.
+        # new sensor, get the data from postgresql
+        data = self.input.get_sensor_doc(sensor_id)
+        if not data:
+            return
+
+        hostname = data.sensor_info.computer_dns_name
+        self.sensor_map[sensor_id] = hostname
+        self.sensors[hostname] = data
+
+        return data
+
     def transport(self, debug=False):
         # get process list
 
         for proc in self.get_process_docs():
-            # TODO: better way of doing this once we have multiple ways of getting docs...
-            self.input_proc_guids.add(Transporter.get_process_id(proc))
+            self.input_proc_guids.add(get_process_id(proc))
             new_md5sums = self.update_md5sums(proc)
             new_sensor_ids = self.update_sensors(proc)
 
-            self.output_process_doc(proc)
+            # output docs, sending binaries & sensors first
+            for md5sum in new_md5sums:
+                doc = self.input.get_binary_doc(md5sum)
+                if not doc:
+                    print "Could not retrieve MD5sum %s" % md5sum
+                else:
+                    print "Retrieved MD5sum %s" % md5sum
+                    self.output_binary_doc(doc)
 
-        print 'Need md5s: %s' % self.input_md5set
+            for sensor in new_sensor_ids:
+                doc = self.update_sensor_info(sensor)
+                self.output_sensor_info(doc)
+
+            self.output_process_doc(proc)
 
 
 class CleanseSolrData(object):

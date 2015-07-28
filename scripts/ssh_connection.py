@@ -9,10 +9,14 @@ import select
 import threading
 import re
 import psycopg2
+import psycopg2.extras
 import requests
 import logging
+from collections import namedtuple
 
 log = logging.getLogger(__name__)
+
+SensorInfo = namedtuple('SensorInfo', 'sensor_info build_info os_info')
 
 # TODO: replace with proper logging
 def verbose(d):
@@ -180,7 +184,7 @@ class SSHBase(object):
 class SSHInputSource(SSHBase):
     def __init__(self, **kwargs):
         self.query = kwargs.pop('query')
-        self.pagination_length = 10
+        self.pagination_length = 20
         SSHBase.__init__(self, **kwargs)
 
     def paginated_get(self, query, params, start=0):
@@ -211,10 +215,11 @@ class SSHInputSource(SSHBase):
     def get_binary_doc(self, md5sum):
         query = "/solr/cbmodules/select"
         params = {
-            'q': 'md5:%s' % md5sum,
+            'q': 'md5:%s' % md5sum.upper(),
             'wt': 'json'
         }
         result = self.solr_get(query, params=params)
+        print result.url, result.content
         if result.status_code != 200:
             return None
         rj = result.json()
@@ -222,6 +227,26 @@ class SSHInputSource(SSHBase):
         if len(docs) == 0:
             return None
         return docs[0]
+
+    def get_sensor_doc(self, sensor_id):
+        try:
+            conn = self.connect_database()
+            cur = conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+            cur.execute('select * from sensor_registrations where id=%s',(sensor_id,))
+            sensor_info = cur.fetchone()
+            if not sensor_info:
+                return None
+            cur.execute('select * from sensor_builds where id=%s', (sensor_info.build_id,))
+            build_info = cur.fetchone()
+            cur.execute('select * from sensor_os_environments where id=%s', (sensor_info.os_environment_id,))
+            environment_info = cur.fetchone()
+            conn.commit()
+        except:
+            import traceback
+            traceback.print_exc()
+            return None
+
+        return SensorInfo(sensor_info=sensor_info, build_info=build_info, os_info=environment_info)
 
     def get_feed_docs(self):
         pass
@@ -238,7 +263,7 @@ if __name__ == '__main__':
     c = SSHInputSource(username='root', hostname='cb5.wedgie.org', port=2202, private_key=None,
                        query='process_name:chrome.exe')
     conn = c.connect_database()
-    docs = c.get_process_docs()
-    for doc in docs:
-        print doc
+
+    from IPython import embed
+    embed()
     c.close()
