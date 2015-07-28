@@ -61,7 +61,7 @@ def main():
     else:
         port_number = 22
         if destination_parts.group(4):
-            port_number = destination_parts.group(4)
+            port_number = int(destination_parts.group(4))
         output_sink = SSHOutputSink(username=destination_parts.group(1), hostname=destination_parts.group(2),
                                     port=port_number, private_key=options.key)
 

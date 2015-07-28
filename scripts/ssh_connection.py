@@ -13,6 +13,8 @@ import psycopg2.extras
 import requests
 import logging
 from collections import namedtuple
+import pprint
+import json
 
 log = logging.getLogger(__name__)
 
@@ -255,8 +257,54 @@ class SSHInputSource(SSHBase):
         pass
 
 
-def SSHOutputSink(SSHBase):
-    pass
+class SSHOutputSink(SSHBase):
+    def __init__(self, **kwargs):
+        SSHBase.__init__(self, **kwargs)
+        self.existing_md5s = set()
+
+    # TODO: cut-and-paste violation
+    def get_binary_doc(self, md5sum):
+        query = "/solr/cbmodules/select"
+        params = {
+            'q': 'md5:%s' % md5sum.upper(),
+            'wt': 'json'
+        }
+        result = self.solr_get(query, params=params)
+        print result.url, result.content
+        if result.status_code != 200:
+            return None
+        rj = result.json()
+        docs = rj.get('response', {}).get('docs', [{}])
+        if len(docs) == 0:
+            return None
+        return docs[0]
+
+    def output_doc(self, url, doc_content):
+        args = {"add": {"commitWithin": 5000, "doc": doc_content}}
+        headers = {'content-type': 'application/json; charset=utf8'}
+        r = self.solr_post(url, data=json.dumps(args), headers=headers, timeout=60)
+        if not r.ok:
+            print "ERROR:", r.content
+        return r
+
+    def output_binary_doc(self, doc_content):
+        md5sum = doc_content.get('md5').upper()
+        if md5sum in self.existing_md5s:
+            return
+
+        if self.get_binary_doc(md5sum):
+            self.existing_md5s.add(md5sum)
+            return
+
+        self.output_doc("/solr/cbmodules/update/json", doc_content)
+
+    def output_process_doc(self, doc_content):
+        self.output_doc("/solr/0/update", doc_content)
+
+    def output_sensor_info(self, doc_content):
+        print "got sensor info:"
+        pprint.pprint(doc_content)
+
 
 
 if __name__ == '__main__':

@@ -83,9 +83,10 @@ class Transporter(object):
         return data
 
     def transport(self, debug=False):
-        # get process list
+        # TODO: multithread this so we have some parallelization
 
-        for proc in self.get_process_docs():
+        # get process list
+       for proc in self.get_process_docs():
             self.input_proc_guids.add(get_process_id(proc))
             new_md5sums = self.update_md5sums(proc)
             new_sensor_ids = self.update_sensors(proc)
@@ -118,6 +119,10 @@ class CleanseSolrData(object):
         # TODO: erase parent_unique_id if the parent isn't available in our input dataset
         #doc.pop('parent_unique_id', None)
         #doc.pop('terminated', None)
+
+        for key in doc_content.keys():
+            if key.endswith('_facet'):
+                doc_content.pop(key, None)
 
         return doc_content
 

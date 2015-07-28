@@ -28,6 +28,7 @@ class FileOutputSink(object):
         os.makedirs(os.path.join(pathname, 'binaries'), 0755)
         os.makedirs(os.path.join(pathname, 'sensors'), 0755)
 
+        # TODO: only create the directories we need
         for dirname in ['procs', 'binaries']:
             for segment in ['%02X' % x for x in range(0,256)]:
                 os.makedirs(os.path.join(pathname, dirname, segment), 0755)
