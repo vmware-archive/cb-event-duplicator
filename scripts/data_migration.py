@@ -41,10 +41,7 @@ def main():
             z.extractall(tempdir)
 
             input_source = FileInputSource(tempdir)
-    if not source_parts:
-        # source_parts is a file path
-        input_source = FileInputSource(options.source)
-    else:
+    elif source_parts:
         port_number = 22
         if source_parts.group(4):
             port_number = int(source_parts.group(4))
@@ -55,6 +52,9 @@ def main():
 
         input_source = SSHInputSource(username=source_parts.group(1), hostname=source_parts.group(2),
                                       port=port_number, private_key=options.key, query=options.query)
+    else:
+        # source_parts is a file path
+        input_source = FileInputSource(options.source)
 
     if not destination_parts:
         output_sink = FileOutputSink(options.destination)
