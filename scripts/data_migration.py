@@ -7,6 +7,9 @@ import re
 from ssh_connection import SSHInputSource, SSHOutputSink
 from transporter import Transporter, DataAnonymizer
 from file_connection import FileInputSource, FileOutputSink
+import requests
+import tempfile
+import zipfile
 
 def main():
     parser = argparse.ArgumentParser(description="Transfer data from one Cb server to another")
@@ -25,6 +28,19 @@ def main():
     source_parts = host_match.match(options.source)
     destination_parts = host_match.match(options.destination)
 
+    if options.source.startswith(('http://', 'https://')):
+        with tempfile.NamedTemporaryFile() as handle:
+            response = requests.get(options.source, stream=True)
+            if not response.ok:
+                raise Exception("Could not retrieve package at %s" % options.source)
+            for block in response.iter_content(1024):
+                handle.write(block)
+
+            tempdir = tempfile.mkdtemp()
+            z = zipfile.ZipFile(handle.name)
+            z.extractall(tempdir)
+
+            input_source = FileInputSource(tempdir)
     if not source_parts:
         # source_parts is a file path
         input_source = FileInputSource(options.source)
