@@ -12,7 +12,6 @@ import psycopg2
 import psycopg2.extras
 import requests
 import logging
-import pprint
 import json
 from utils import get_process_id, update_sensor_id_refs
 
@@ -252,6 +251,24 @@ class SSHInputSource(SSHBase):
         for doc in self.paginated_get(query, params):
             yield doc
 
+    def get_feed_doc(self, feed_key):
+        query = "/solr/cbfeeds/select"
+        feed_name, feed_id = feed_key.split(':')
+
+        params = {
+            'q': 'id:"%s" AND feed_name:%s' % (feed_id, feed_name),
+            'wt': 'json'
+        }
+        result = self.solr_get(query, params=params)
+        if not result.ok:
+            return None
+        rj = result.json()
+        docs = rj.get('response', {}).get('docs', [{}])
+        if len(docs) == 0:
+            return None
+
+        return docs[0]
+
     def get_binary_doc(self, md5sum):
         query = "/solr/cbmodules/select"
         params = {
@@ -342,6 +359,9 @@ class SSHOutputSink(SSHBase):
         if not r.ok:
             print "ERROR:", r.content
         return r
+
+    def output_feed_doc(self, doc_content):
+        self.output_doc("/solr/cbfeeds/update/json", doc_content)
 
     def output_binary_doc(self, doc_content):
         md5sum = doc_content.get('md5').upper()

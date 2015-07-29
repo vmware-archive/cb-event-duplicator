@@ -10,6 +10,27 @@ from file_connection import FileInputSource, FileOutputSink
 import requests
 import tempfile
 import zipfile
+import logging
+
+
+def initialize_logger(verbose):
+    _logger = logging.getLogger(__file__)
+
+    if verbose:
+        _logger.setLevel(logging.DEBUG)
+    else:
+        _logger.setLevel(logging.INFO)
+
+    # create console handler and set level to info
+    handler = logging.StreamHandler()
+    if verbose:
+        handler.setLevel(logging.DEBUG)
+    else:
+        handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)-15s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    _logger.addHandler(handler)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Transfer data from one Cb server to another")
@@ -27,6 +48,8 @@ def main():
 
     source_parts = host_match.match(options.source)
     destination_parts = host_match.match(options.destination)
+
+    initialize_logger(options.verbose)
 
     if options.source.startswith(('http://', 'https://')):
         with tempfile.NamedTemporaryFile() as handle:

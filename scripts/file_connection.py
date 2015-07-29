@@ -3,8 +3,6 @@ __author__ = 'jgarman'
 import os
 import hashlib
 from utils import get_process_id, json_encode
-import json
-import pprint
 
 
 def get_process_path(proc_guid):
@@ -31,6 +29,7 @@ class FileOutputSink(object):
         os.makedirs(os.path.join(pathname, 'procs'), 0755)
         os.makedirs(os.path.join(pathname, 'binaries'), 0755)
         os.makedirs(os.path.join(pathname, 'sensors'), 0755)
+        os.makedirs(os.path.join(pathname, 'feeds'), 0755)
 
         # TODO: only create the directories we need
         for dirname in ['procs', 'binaries']:
@@ -47,6 +46,10 @@ class FileOutputSink(object):
 
     def output_sensor_info(self, doc_content):
         open(os.path.join(self.pathname, 'sensors', '%s.json' % doc_content['sensor_info']['id']), 'wb').\
+            write(json_encode(doc_content))
+
+    def output_feed_doc(self, doc_content):
+        open(os.path.join(self.pathname, 'feeds', '%s:%s.json' % (doc_content['feed_name'], doc_content['id']))).\
             write(json_encode(doc_content))
 
     def set_data_version(self, version):

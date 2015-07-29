@@ -11,18 +11,14 @@ class Transporter(object):
 
     def __init__(self, input_source, output_sink):
         self.input_md5set = set()
-        self.output_md5set = set()
         self.input_proc_guids = set()
-        self.output_proc_guids = set()
 
         self.input = input_source
         self.output = output_sink
         self.mungers = [CleanseSolrData()]
 
-        # sensor map hostname -> document
-        self.sensors = dict()
-        # map source sensor_id to hostname
-        self.sensor_map = dict()
+        self.seen_sensor_ids = set()
+        self.seen_feeds = set()
 
     def add_anonymizer(self, munger):
         self.mungers.append(munger)
@@ -35,20 +31,19 @@ class Transporter(object):
 
     def output_binary_doc(self, doc):
         for munger in self.mungers:
+            # note that the mungers are mutating the data in place, anyway.
             doc = munger.munge_document('binary', doc)
 
         self.output.output_binary_doc(doc)
-
-    def output_sensor_info(self, doc):
-        self.output.output_sensor_info(doc)
 
     def update_sensors(self, proc):
         sensor_id = proc.get('sensor_id', 0)
         if not sensor_id:
             return []
 
-        if sensor_id and sensor_id not in self.sensor_map:
+        if sensor_id and sensor_id not in self.seen_sensor_ids:
             # notify caller that this sensor_id has to be inserted into the target
+            self.seen_sensor_ids.add(sensor_id)
             return [sensor_id]
 
         return []
@@ -69,18 +64,19 @@ class Transporter(object):
         for proc in self.input.get_process_docs():
             yield proc
 
-    def update_sensor_info(self, sensor_id):
-        # FIXME: this will merge multiple sensors with the same hostname together.
-        # new sensor, get the data from postgresql
-        data = self.input.get_sensor_doc(sensor_id)
-        if not data:
-            return
+    def update_feeds(self, doc):
+        feed_keys = [k for k in doc.keys() if k.startswith('alliance_data_')]
+        feed_lookup = set()
+        new_feeds = []
 
-        hostname = data['sensor_info'].get('computer_dns_name')
-        self.sensor_map[sensor_id] = hostname
-        self.sensors[hostname] = data
+        for key in feed_keys:
+            feed_name = key[14:]
+            for doc_name in doc[key]:
+                feed_lookup.add("%s:%s" % (feed_name, doc_name))
 
-        return data
+        retval = feed_lookup - self.seen_feeds
+        self.seen_feeds |= feed_lookup
+        return retval
 
     def transport(self, debug=False):
         # TODO: multithread this so we have some parallelization
@@ -94,6 +90,7 @@ class Transporter(object):
             self.input_proc_guids.add(get_process_id(proc))
             new_md5sums = self.update_md5sums(proc)
             new_sensor_ids = self.update_sensors(proc)
+            new_feed_ids = self.update_feeds(proc)
 
             # output docs, sending binaries & sensors first
             for md5sum in new_md5sums:
@@ -105,9 +102,14 @@ class Transporter(object):
                 else:
                     self.output_binary_doc(doc)
 
+            # TODO: right now we don't munge sensor or feed documents
             for sensor in new_sensor_ids:
-                doc = self.update_sensor_info(sensor)
-                self.output_sensor_info(doc)
+                doc = self.input.get_sensor_doc(sensor)
+                self.output.output_sensor_info(doc)
+
+            for feed in new_feed_ids:
+                doc = self.input.get_feed_doc(feed)
+                self.output.output_feed_doc(doc)
 
             self.output_process_doc(proc)
 
@@ -141,5 +143,57 @@ class DataAnonymizer(object):
     def __init__(self):
         pass
 
+    @staticmethod
+    def translate(s):
+        """
+        Super dumb translation for anonymizing strings.
+        """
+        s_new = ''
+        for c in s:
+            if c == '\\':
+                s_new += c
+            else:
+                c = chr((ord(c)-65 + 13)%26 + 65)
+                s_new += c
+        return s_new
+
+    def anonymize(self, doc):
+        hostname = doc.get('hostname', '')
+        hostname_new = DataAnonymizer.translate(hostname)
+        username = doc.get('username', '')
+        username_new = None
+
+        translation_usernames = {}
+
+        if len(username) > 0:
+            if username.lower() != 'system' and username.lower() != 'local service' and username.lower() != 'network service':
+                pieces = username.split('\\')
+                for piece in pieces:
+                    translation_usernames[piece] = DataAnonymizer.translate(piece)
+
+        for field in doc:
+            values = doc[field]
+            try:
+                if not values:
+                    continue
+                was_list = True
+                targets = values
+                if not hasattr(values, '__iter__'):
+                    was_list = False
+                    targets = [values]
+                values = []
+                for target in targets:
+                    target = target.replace(hostname, hostname_new)
+                    for key in translation_usernames:
+                        target = target.replace(key, translation_usernames.get(key))
+                    values.append(target)
+                if not was_list:
+                    values = values[0]
+                doc[field] = values
+            except AttributeError:
+                pass
+
+        return doc
+
     def munge_document(self, doc_type, doc_content):
-        return doc_content
+        return self.anonymize(doc_content)
