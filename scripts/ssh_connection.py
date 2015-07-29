@@ -14,6 +14,7 @@ import requests
 import logging
 import pprint
 import json
+from utils import get_process_id, update_sensor_id_refs
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +94,7 @@ class SSHBase(object):
         self.forwarded_connections = []
         self.have_cb_conf = False
         self.get_cb_conf()
+        self.dbhandle = None
 
         solr_forwarded_port = self.forward_tunnel('127.0.0.1', int(self.get_cb_conf_item('SolrPort', 8080)))
         self.solr_url_base = 'http://127.0.0.1:%d' % solr_forwarded_port
@@ -145,11 +147,15 @@ class SSHBase(object):
 
         return retval
 
-    def connect_database(self):
+    @property
+    def dbconn(self):
         """
         :return: database_connection
         :rtype: psycopg2.connection
         """
+        if self.dbhandle:
+            return self.dbhandle
+
         url = self.get_cb_conf_item('DatabaseURL', None)
         if not url:
             raise Exception("Could not get DatabaseURL from remote server")
@@ -167,6 +173,7 @@ class SSHBase(object):
             conn = psycopg2.connect(user=username, password=password, database=database_name, host='127.0.0.1',
                                     port=local_port)
 
+            self.dbhandle = conn
             return conn
         else:
             raise Exception("Could not connect to database")
@@ -179,6 +186,39 @@ class SSHBase(object):
 
     def solr_post(self, path, *args, **kwargs):
         return requests.post('%s%s' % (self.solr_url_base, path), *args, **kwargs)
+
+    def find_db_row_matching(self, table_name, obj):
+        obj.pop('id', None)
+
+        cursor = self.dbconn.cursor()
+        predicate = ' AND '.join(["%s = %%(%s)s" % (key, key) for key in obj.keys()])
+
+        # FIXME: is there a better way to do this?
+        query = 'SELECT id from %s WHERE %s' % (table_name, predicate)
+        cursor.execute(query, obj)
+
+        row_id = cursor.fetchone()
+        if row_id:
+            return row_id[0]
+        else:
+            return None
+
+    def insert_db_row(self, table_name, obj):
+        obj.pop('id', None)
+
+        cursor = self.dbconn.cursor()
+        fields = ', '.join(obj.keys())
+        values = ', '.join(['%%(%s)s' % x for x in obj])
+        query = 'INSERT INTO %s (%s) VALUES (%s) RETURNING id' % (table_name, fields, values)
+        try:
+            cursor.execute(query, obj)
+            self.dbconn.commit()
+            row_id = cursor.fetchone()[0]
+            return row_id
+        except psycopg2.Error as e:
+            import traceback
+            traceback.print_exc()
+            return None
 
 
 class SSHInputSource(SSHBase):
@@ -232,15 +272,15 @@ class SSHInputSource(SSHBase):
 
     def get_sensor_doc(self, sensor_id):
         try:
-            conn = self.connect_database()
+            conn = self.dbconn
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute('select * from sensor_registrations where id=%s',(sensor_id,))
+            cur.execute('SELECT * FROM sensor_registrations WHERE id=%s',(sensor_id,))
             sensor_info = cur.fetchone()
             if not sensor_info:
                 return None
-            cur.execute('select * from sensor_builds where id=%s', (sensor_info['build_id'],))
+            cur.execute('SELECT * FROM sensor_builds WHERE id=%s', (sensor_info['build_id'],))
             build_info = cur.fetchone()
-            cur.execute('select * from sensor_os_environments where id=%s', (sensor_info['os_environment_id'],))
+            cur.execute('SELECT * FROM sensor_os_environments WHERE id=%s', (sensor_info['os_environment_id'],))
             environment_info = cur.fetchone()
             conn.commit()
         except:
@@ -268,9 +308,15 @@ class SSHOutputSink(SSHBase):
     def __init__(self, **kwargs):
         SSHBase.__init__(self, **kwargs)
         self.existing_md5s = set()
+        self.sensor_id_map = {}
+        self.sensor_os_map = {}
+        self.sensor_build_map = {}
 
     def set_data_version(self, version):
-        # TODO: implement
+        target_version = self.open_file('/usr/share/cb/VERSION').read()
+        if version.strip() != target_version.strip():
+            return False
+
         return True
 
     # TODO: cut-and-paste violation
@@ -309,12 +355,34 @@ class SSHOutputSink(SSHBase):
         self.output_doc("/solr/cbmodules/update/json", doc_content)
 
     def output_process_doc(self, doc_content):
+        # first, update the sensor_id in the process document to match the target settings
+        if doc_content['sensor_id'] not in self.sensor_id_map:
+            print "WARNING: got process document %s without associated sensor data" % get_process_id(doc_content)
+        else:
+            sensor_id = self.sensor_id_map[doc_content['sensor_id']]
+            update_sensor_id_refs(doc_content, sensor_id)
+
         self.output_doc("/solr/0/update", doc_content)
 
     def output_sensor_info(self, doc_content):
         # we need to first ensure that the sensor build and os_environment are available in the target server
+        # TODO: this assumes that we don't get duplicate sensor info
+        original_id = doc_content['sensor_info']['id']
 
-        pprint.pprint(doc_content)
+        os_id = self.find_db_row_matching('sensor_os_environments', doc_content['os_info'])
+        if not os_id:
+            os_id = self.insert_db_row('sensor_os_environments', doc_content['os_info'])
+
+        build_id = self.find_db_row_matching('sensor_builds', doc_content['build_info'])
+        if not build_id:
+            build_id = self.insert_db_row('sensor_builds', doc_content['build_info'])
+
+        doc_content['sensor_info']['group_id'] = 1         # TODO: mirror groups?
+        doc_content['sensor_info']['build_id'] = build_id
+        doc_content['sensor_info']['os_environment_id'] = os_id
+        sensor_id = self.insert_db_row('sensor_registrations', doc_content['sensor_info'])
+
+        self.sensor_id_map[original_id] = sensor_id
 
     def cleanup(self):
         headers = {'content-type': 'application/json; charset=utf8'}
@@ -328,7 +396,7 @@ class SSHOutputSink(SSHBase):
 if __name__ == '__main__':
     c = SSHInputSource(username='root', hostname='cb5.wedgie.org', port=2202, private_key=None,
                        query='process_name:chrome.exe')
-    conn = c.connect_database()
+    conn = c.dbconn
 
     from IPython import embed
     embed()

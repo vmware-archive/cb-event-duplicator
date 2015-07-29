@@ -29,3 +29,23 @@ def json_encode(d):
             return o.strftime("%Y-%m-%d %H:%M:%S.%f%z")
 
     return json.dumps(d, default=default)
+
+def replace_sensor_in_guid(guid, new_id):
+    # first eight characters of the GUID is the sensor ID
+    return '%08x-%s' % (new_id, guid[9:])
+
+def update_sensor_id_refs(proc, new_id):
+    # this function will mutate proc in-place
+    proc['sensor_id'] = new_id
+
+    parent_unique_id = proc.get('parent_unique_id', None)
+    if parent_unique_id:
+        new_parent_id = replace_sensor_in_guid(parent_unique_id, new_id)
+        proc['parent_unique_id'] = new_parent_id
+
+    unique_id = proc.get('unique_id', None)
+    if unique_id:
+        new_unique_id = replace_sensor_in_guid(unique_id, new_id)
+        proc['unique_id'] = new_unique_id
+
+    return proc
