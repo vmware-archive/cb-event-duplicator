@@ -49,7 +49,7 @@ class FileOutputSink(object):
             write(json_encode(doc_content))
 
     def output_feed_doc(self, doc_content):
-        open(os.path.join(self.pathname, 'feeds', '%s:%s.json' % (doc_content['feed_name'], doc_content['id']))).\
+        open(os.path.join(self.pathname, 'feeds', '%s:%s.json' % (doc_content['feed_name'], doc_content['id'])), 'wb').\
             write(json_encode(doc_content))
 
     def set_data_version(self, version):

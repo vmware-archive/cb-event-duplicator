@@ -100,6 +100,7 @@ class Transporter(object):
                     # TODO: logging
                     # print "Could not retrieve MD5sum %s" % md5sum
                 else:
+                    new_feed_ids |= self.update_feeds(doc)
                     self.output_binary_doc(doc)
 
             # TODO: right now we don't munge sensor or feed documents
