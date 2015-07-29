@@ -3,25 +3,31 @@ __author__ = 'jgarman'
 import datetime
 import json
 
+def split_process_id(guid):
+    if type(guid) == int:
+        return (guid, 1)
+
+    return (guid[:36], guid[37:])
+
 def get_process_id(proc):
     old_style_id = proc.get('id', None)
     if old_style_id and old_style_id != '':
-        return old_style_id
+        return int(old_style_id)
     else:
         new_style_id = proc.get('unique_id', None)
         if not new_style_id:
-            log.warn("Process has no unique_id")
+            return None
         return new_style_id
 
 def get_parent_process_id(proc):
-    old_style_id = proc.get('parent_id', None)
+    old_style_id = proc.get('parent_unique_id', None)
     if old_style_id and old_style_id != '':
         return old_style_id
     else:
-        new_style_id = proc.get('parent_unique_id', None)
+        new_style_id = proc.get('parent_id', None)
         if not new_style_id:
-            log.warn("Process has no parent_unique_id")
-        return new_style_id
+            return None
+        return int(new_style_id)
 
 def json_encode(d):
     def default(o):

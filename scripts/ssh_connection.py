@@ -14,6 +14,7 @@ import requests
 import logging
 import json
 from utils import get_process_id, update_sensor_id_refs
+from copy import deepcopy
 
 log = logging.getLogger(__name__)
 
@@ -241,10 +242,15 @@ class SSHInputSource(SSHBase):
             params['start'] += len(docs)
             params['rows'] = self.pagination_length
 
-    def get_process_docs(self):
+    def get_process_docs(self, query_filter=None):
         query = "/solr/0/select"
+        if not query_filter:
+            query_filter = self.query
+
+        print 'get_process_docs(%s)' % query_filter
+
         params = {
-            'q': self.query,
+            'q': query_filter,
             'sort': 'start asc',
             'wt': 'json'
         }
@@ -379,12 +385,19 @@ class SSHOutputSink(SSHBase):
         if doc_content['sensor_id'] not in self.sensor_id_map:
             print "WARNING: got process document %s without associated sensor data" % get_process_id(doc_content)
         else:
+            print "updating sensor for doc %s - old sensor %d, new sensor %d" % (get_process_id(doc_content),
+                                                                                 doc_content['sensor_id'],
+                                                                                 self.sensor_id_map[doc_content['sensor_id']])
             sensor_id = self.sensor_id_map[doc_content['sensor_id']]
+            doc_content = deepcopy(doc_content)
             update_sensor_id_refs(doc_content, sensor_id)
 
         self.output_doc("/solr/0/update", doc_content)
 
     def output_sensor_info(self, doc_content):
+        # TODO: see if there's already a sensor that matches what we're looking for, and reuse that
+
+
         # we need to first ensure that the sensor build and os_environment are available in the target server
         # TODO: this assumes that we don't get duplicate sensor info
         original_id = doc_content['sensor_info']['id']

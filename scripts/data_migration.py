@@ -41,6 +41,7 @@ def main():
                         default=os.path.join(os.path.expanduser('~'), '.ssh', 'id_rsa'))
     parser.add_argument("--anonymize", help="Anonymize data in transport", action="store_true", default=False)
     parser.add_argument("-q", "--query", help="Source data query (required for server input)", action="store")
+    parser.add_argument("--tree", help="Traverse up and down process tree", action="store_true", default=False)
 
     options = parser.parse_args()
 
@@ -88,7 +89,7 @@ def main():
         output_sink = SSHOutputSink(username=destination_parts.group(1), hostname=destination_parts.group(2),
                                     port=port_number, private_key=options.key)
 
-    t = Transporter(input_source, output_sink)
+    t = Transporter(input_source, output_sink, tree=options.tree)
 
     if options.anonymize:
         t.add_anonymizer(DataAnonymizer())

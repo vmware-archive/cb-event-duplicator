@@ -38,6 +38,9 @@ class FileOutputSink(object):
 
     def output_process_doc(self, doc_content):
         proc_guid = get_process_id(doc_content)
+        pathname = os.path.join(self.pathname, 'procs', get_process_path(proc_guid))
+        if os.path.exists(pathname):
+            print 'UHOH: process %s already existed, writing twice' % proc_guid
         open(os.path.join(self.pathname, 'procs', get_process_path(proc_guid)), 'wb').write(json_encode(doc_content))
 
     def output_binary_doc(self, doc_content):

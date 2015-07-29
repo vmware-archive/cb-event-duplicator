@@ -1,7 +1,20 @@
 __author__ = 'jgarman'
 
 import logging
-from utils import get_process_id, get_parent_process_id
+from utils import get_process_id, get_parent_process_id, split_process_id
+
+from types import GeneratorType
+
+def flatten(*stack):
+    stack = list(stack)
+    while stack:
+        try: x = stack[0].next()
+        except StopIteration:
+            stack.pop(0)
+            continue
+        if isinstance(x, GeneratorType): stack.insert(0, x)
+        else: yield x
+
 
 log = logging.getLogger(__name__)
 
@@ -9,9 +22,10 @@ class Transporter(object):
     # TODO: add check for input and output Cb version before executing
     # - this data is found in the file /usr/share/cb/VERSION
 
-    def __init__(self, input_source, output_sink):
+    def __init__(self, input_source, output_sink, tree=False):
         self.input_md5set = set()
         self.input_proc_guids = set()
+        self.input_recursed_guids = set()
 
         self.input = input_source
         self.output = output_sink
@@ -19,6 +33,8 @@ class Transporter(object):
 
         self.seen_sensor_ids = set()
         self.seen_feeds = set()
+
+        self.traverse_tree = tree
 
     def add_anonymizer(self, munger):
         self.mungers.append(munger)
@@ -50,7 +66,9 @@ class Transporter(object):
 
     def update_md5sums(self, proc):
         md5s = set()
-        md5s.add(proc.get('process_md5'))
+        process_md5 = proc.get('process_md5', None)
+        if process_md5 and process_md5 != '0'*32:
+            md5s.add(proc.get('process_md5'))
         for modload_complete in proc.get('modload_complete', []):
             fields = modload_complete.split('|')
             md5s.add(fields[1])
@@ -59,15 +77,82 @@ class Transporter(object):
         self.input_md5set |= md5s
         return retval
 
+    def yield_proc(self, proc):
+        if not proc:
+            return
+
+        guid = get_process_id(proc)
+        print 'proc %s:' % guid ,
+        if guid not in self.input_proc_guids:
+            print 'yielding'
+            yield proc
+        else:
+            print 'already existed'
+
+    def traverse_up(self, guid):
+        # TODO: this prompts a larger issue of - how do we handle process segments?
+        total = []
+
+        for proc in self.input.get_process_docs('unique_id:%s' % (guid,)):
+            process_id = get_process_id(proc)
+            if process_id not in self.input_proc_guids:
+                self.input_proc_guids.add(process_id)
+                total.append(proc)
+
+            parent_process_id = get_parent_process_id(proc)
+            if parent_process_id and parent_process_id not in self.input_recursed_guids:
+                total.extend(self.traverse_up(parent_process_id))
+
+            self.input_recursed_guids.add(process_id)
+
+        return total
+
+    def traverse_down(self, guid):
+        total = []
+
+        for proc in self.input.get_process_docs('parent_unique_id:%s' % (guid,)):
+            process_id = get_process_id(proc)
+            if process_id not in self.input_proc_guids:
+                self.input_proc_guids.add(process_id)
+                total.append(proc)
+
+            if process_id not in self.input_recursed_guids:
+                total.extend(self.traverse_down(process_id))
+            self.input_recursed_guids.add(process_id)
+
+        return total
+
+    def traverse_up_down(self, proc):
+        # TODO: infinite recursion prevention
+        parent_process_id = get_parent_process_id(proc)
+        process_id = get_process_id(proc)
+
+        total = []
+        # get parents
+        if parent_process_id:
+            total.extend(self.traverse_up(parent_process_id))
+
+        total.extend(self.traverse_down(process_id))
+
+        print [get_process_id(proc) for proc in total]
+
+        for proc in total:
+            yield proc
+
     def get_process_docs(self):
         # TODO: append so that this also grabs process trees when necessary
         for proc in self.input.get_process_docs():
+            process_id = get_process_id(proc)
+            self.input_proc_guids.add(get_process_id(proc))
             yield proc
+
+            if self.traverse_tree:
+                for tree_proc in self.traverse_up_down(proc):
+                    yield tree_proc
 
     def update_feeds(self, doc):
         feed_keys = [k for k in doc.keys() if k.startswith('alliance_data_')]
         feed_lookup = set()
-        new_feeds = []
 
         for key in feed_keys:
             feed_name = key[14:]
@@ -87,11 +172,13 @@ class Transporter(object):
 
         # get process list
         for proc in self.get_process_docs():
-            self.input_proc_guids.add(get_process_id(proc))
+            print 'main get_process_docs got %s' % get_process_id(proc)
+
             new_md5sums = self.update_md5sums(proc)
             new_sensor_ids = self.update_sensors(proc)
             new_feed_ids = self.update_feeds(proc)
 
+            print 'new md5sums=%s' % new_md5sums
             # output docs, sending binaries & sensors first
             for md5sum in new_md5sums:
                 doc = self.input.get_binary_doc(md5sum)
