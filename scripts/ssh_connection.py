@@ -114,6 +114,7 @@ class SSHBase(object):
                 local_port += 1
 
         if conn:
+            conn.daemon = True
             conn.start()
             self.forwarded_connections.append(conn)
             return local_port
@@ -226,6 +227,9 @@ class SSHInputSource(SSHBase):
             return None
         return docs[0]
 
+    def get_version(self):
+        return self.open_file('/usr/share/cb/VERSION').read()
+
     def get_sensor_doc(self, sensor_id):
         try:
             conn = self.connect_database()
@@ -264,6 +268,10 @@ class SSHOutputSink(SSHBase):
     def __init__(self, **kwargs):
         SSHBase.__init__(self, **kwargs)
         self.existing_md5s = set()
+
+    def set_data_version(self, version):
+        # TODO: implement
+        return True
 
     # TODO: cut-and-paste violation
     def get_binary_doc(self, md5sum):

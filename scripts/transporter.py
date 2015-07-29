@@ -85,8 +85,12 @@ class Transporter(object):
     def transport(self, debug=False):
         # TODO: multithread this so we have some parallelization
 
+        input_version = self.input.get_version()
+        if not self.output.set_data_version(input_version):
+            raise Exception("Input and Output versions are incompatible")
+
         # get process list
-       for proc in self.get_process_docs():
+        for proc in self.get_process_docs():
             self.input_proc_guids.add(get_process_id(proc))
             new_md5sums = self.update_md5sums(proc)
             new_sensor_ids = self.update_sensors(proc)
@@ -107,9 +111,9 @@ class Transporter(object):
 
             self.output_process_doc(proc)
 
-       # clean up
-       self.input.cleanup()
-       self.output.cleanup()
+        # clean up
+        self.input.cleanup()
+        self.output.cleanup()
 
 
 class CleanseSolrData(object):

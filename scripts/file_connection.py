@@ -49,5 +49,10 @@ class FileOutputSink(object):
         open(os.path.join(self.pathname, 'sensors', '%s.json' % doc_content['sensor_info']['id']), 'wb').\
             write(json_encode(doc_content))
 
+    def set_data_version(self, version):
+        # TODO: implement
+        open(os.path.join(self.pathname, 'VERSION'), 'wb').write(version)
+        return True
+
     def cleanup(self):
         pass
