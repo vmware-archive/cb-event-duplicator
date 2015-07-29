@@ -76,7 +76,7 @@ class Transporter(object):
         if not data:
             return
 
-        hostname = data.sensor_info.computer_dns_name
+        hostname = data['sensor_info'].get('computer_dns_name')
         self.sensor_map[sensor_id] = hostname
         self.sensors[hostname] = data
 
@@ -95,9 +95,10 @@ class Transporter(object):
             for md5sum in new_md5sums:
                 doc = self.input.get_binary_doc(md5sum)
                 if not doc:
-                    print "Could not retrieve MD5sum %s" % md5sum
+                    pass
+                    # TODO: logging
+                    # print "Could not retrieve MD5sum %s" % md5sum
                 else:
-                    print "Retrieved MD5sum %s" % md5sum
                     self.output_binary_doc(doc)
 
             for sensor in new_sensor_ids:
@@ -105,6 +106,10 @@ class Transporter(object):
                 self.output_sensor_info(doc)
 
             self.output_process_doc(proc)
+
+       # clean up
+       self.input.cleanup()
+       self.output.cleanup()
 
 
 class CleanseSolrData(object):
@@ -127,6 +132,7 @@ class CleanseSolrData(object):
         return doc_content
 
 
+# TODO: implement
 class DataAnonymizer(object):
     def __init__(self):
         pass

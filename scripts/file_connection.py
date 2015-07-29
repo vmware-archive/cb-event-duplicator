@@ -2,7 +2,7 @@ __author__ = 'jgarman'
 
 import os
 import hashlib
-from utils import get_process_id
+from utils import get_process_id, json_encode
 import json
 import pprint
 
@@ -18,6 +18,10 @@ def get_binary_path(md5sum):
 class FileInputSource(object):
     def __init__(self, pathname):
         self.pathname = pathname
+
+    def cleanup(self):
+        pass
+
 
 class FileOutputSink(object):
     def __init__(self, pathname):
@@ -35,13 +39,15 @@ class FileOutputSink(object):
 
     def output_process_doc(self, doc_content):
         proc_guid = get_process_id(doc_content)
-        open(os.path.join(self.pathname, 'procs', get_process_path(proc_guid)), 'wb').write(json.dumps(doc_content))
+        open(os.path.join(self.pathname, 'procs', get_process_path(proc_guid)), 'wb').write(json_encode(doc_content))
 
     def output_binary_doc(self, doc_content):
         md5sum = doc_content.get('md5').lower()
-        open(os.path.join(self.pathname, 'binaries', get_binary_path(md5sum)), 'wb').write(json.dumps(doc_content))
+        open(os.path.join(self.pathname, 'binaries', get_binary_path(md5sum)), 'wb').write(json_encode(doc_content))
 
     def output_sensor_info(self, doc_content):
-        print "got sensor info:"
-        pprint.pprint(doc_content)
+        open(os.path.join(self.pathname, 'sensors', '%s.json' % doc_content['sensor_info']['id']), 'wb').\
+            write(json_encode(doc_content))
 
+    def cleanup(self):
+        pass

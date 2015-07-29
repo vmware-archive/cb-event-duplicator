@@ -12,13 +12,10 @@ import psycopg2
 import psycopg2.extras
 import requests
 import logging
-from collections import namedtuple
 import pprint
 import json
 
 log = logging.getLogger(__name__)
-
-SensorInfo = namedtuple('SensorInfo', 'sensor_info build_info os_info')
 
 # TODO: replace with proper logging
 def verbose(d):
@@ -92,7 +89,7 @@ class SSHBase(object):
         if private_key: # TODO: fill in, if we need it.
             pass
 
-        self.ssh_connection.connect(hostname=hostname, username=username, port=port)
+        self.ssh_connection.connect(hostname=hostname, username=username, port=port, look_for_keys=False)
         self.forwarded_connections = []
         self.have_cb_conf = False
         self.get_cb_conf()
@@ -221,7 +218,6 @@ class SSHInputSource(SSHBase):
             'wt': 'json'
         }
         result = self.solr_get(query, params=params)
-        print result.url, result.content
         if result.status_code != 200:
             return None
         rj = result.json()
@@ -233,14 +229,14 @@ class SSHInputSource(SSHBase):
     def get_sensor_doc(self, sensor_id):
         try:
             conn = self.connect_database()
-            cur = conn.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute('select * from sensor_registrations where id=%s',(sensor_id,))
             sensor_info = cur.fetchone()
             if not sensor_info:
                 return None
-            cur.execute('select * from sensor_builds where id=%s', (sensor_info.build_id,))
+            cur.execute('select * from sensor_builds where id=%s', (sensor_info['build_id'],))
             build_info = cur.fetchone()
-            cur.execute('select * from sensor_os_environments where id=%s', (sensor_info.os_environment_id,))
+            cur.execute('select * from sensor_os_environments where id=%s', (sensor_info['os_environment_id'],))
             environment_info = cur.fetchone()
             conn.commit()
         except:
@@ -248,12 +244,19 @@ class SSHInputSource(SSHBase):
             traceback.print_exc()
             return None
 
-        return SensorInfo(sensor_info=sensor_info, build_info=build_info, os_info=environment_info)
+        return {
+            'sensor_info': sensor_info,
+            'build_info': build_info,
+            'os_info': environment_info
+        }
 
     def get_feed_docs(self):
         pass
 
     def get_alert_docs(self):
+        pass
+
+    def cleanup(self):
         pass
 
 
@@ -270,7 +273,6 @@ class SSHOutputSink(SSHBase):
             'wt': 'json'
         }
         result = self.solr_get(query, params=params)
-        print result.url, result.content
         if result.status_code != 200:
             return None
         rj = result.json()
@@ -302,9 +304,17 @@ class SSHOutputSink(SSHBase):
         self.output_doc("/solr/0/update", doc_content)
 
     def output_sensor_info(self, doc_content):
-        print "got sensor info:"
+        # we need to first ensure that the sensor build and os_environment are available in the target server
+
         pprint.pprint(doc_content)
 
+    def cleanup(self):
+        headers = {'content-type': 'application/json; charset=utf8'}
+        args = {}
+
+        self.solr_post("/solr/0/update?commit=true", data=json.dumps(args), headers=headers, timeout=60)
+        self.solr_post("/solr/cbmodules/update/json?commit=true", data=json.dumps(args), headers=headers, timeout=60)
+        self.solr_post("/solr/cbfeeds/update/json?commit=true", data=json.dumps(args), headers=headers, timeout=60)
 
 
 if __name__ == '__main__':
