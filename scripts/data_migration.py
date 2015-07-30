@@ -56,8 +56,9 @@ def main():
     initialize_logger(options.verbose)
 
     if options.source == options.destination == 'local':
-        sys.stderr.write("Sending output to yourself?\n\n")
+        sys.stderr.write("Talk to yourself often?\n\n")
         parser.print_usage()
+        return 2
 
     if options.source.startswith(('http://', 'https://')):
         with tempfile.NamedTemporaryFile() as handle:
