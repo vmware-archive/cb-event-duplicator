@@ -34,8 +34,9 @@ def initialize_logger(verbose):
 
 def main():
     parser = argparse.ArgumentParser(description="Transfer data from one Cb server to another")
-    parser.add_argument("source", help="Data source - can be a filepath /tmp/blah.json or a server root@cb5.server:2202")
-    parser.add_argument("destination", help="Data destination - can be a filepath /tmp/blah.json or a server root@cb5.server:2202")
+    parser.add_argument("source", help="Data source - can be a pathname (/tmp/blah), " +
+        "a URL referencing a zip package (http://my.server.com/package.zip), or a server (root@cb5.server:2202)")
+    parser.add_argument("destination", help="Data destination - can be a filepath (/tmp/blah) or a server (root@cb5.server:2202)")
     parser.add_argument("-v", "--verbose", help="Increase output verbosity", action="store_true")
     parser.add_argument("--key", help="SSH private key location", action="store",
                         default=os.path.join(os.path.expanduser('~'), '.ssh', 'id_rsa'))
@@ -57,9 +58,13 @@ def main():
             response = requests.get(options.source, stream=True)
             if not response.ok:
                 raise Exception("Could not retrieve package at %s" % options.source)
+            print "Downloading package from %s..." % options.source
             for block in response.iter_content(1024):
                 handle.write(block)
 
+            handle.flush()
+
+            print "Done. Unzipping..."
             tempdir = tempfile.mkdtemp()
             z = zipfile.ZipFile(handle.name)
             z.extractall(tempdir)

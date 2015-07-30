@@ -32,6 +32,12 @@ class Transporter(object):
 
         self.output.output_process_doc(doc)
 
+    def output_feed_doc(self, doc):
+        for munger in self.mungers:
+            doc = munger.munge_document('feed', doc)
+
+        self.output.output_feed_doc(doc)
+
     def output_binary_doc(self, doc):
         for munger in self.mungers:
             # note that the mungers are mutating the data in place, anyway.
@@ -166,7 +172,7 @@ class Transporter(object):
 
             for feed in new_feed_ids:
                 doc = self.input.get_feed_doc(feed)
-                self.output.output_feed_doc(doc)
+                self.output_feed_doc(doc)
 
             self.output_process_doc(proc)
 
