@@ -25,7 +25,6 @@ class Transporter(object):
     def __init__(self, input_source, output_sink, tree=False):
         self.input_md5set = set()
         self.input_proc_guids = set()
-        self.input_recursed_guids = set()
 
         self.input = input_source
         self.output = output_sink
@@ -77,18 +76,6 @@ class Transporter(object):
         self.input_md5set |= md5s
         return retval
 
-    def yield_proc(self, proc):
-        if not proc:
-            return
-
-        guid = get_process_id(proc)
-        print 'proc %s:' % guid ,
-        if guid not in self.input_proc_guids:
-            print 'yielding'
-            yield proc
-        else:
-            print 'already existed'
-
     def traverse_up(self, guid):
         # TODO: this prompts a larger issue of - how do we handle process segments?
         total = []
@@ -100,10 +87,8 @@ class Transporter(object):
                 total.append(proc)
 
             parent_process_id = get_parent_process_id(proc)
-            if parent_process_id and parent_process_id not in self.input_recursed_guids:
+            if parent_process_id and parent_process_id not in self.input_proc_guids:
                 total.extend(self.traverse_up(parent_process_id))
-
-            self.input_recursed_guids.add(process_id)
 
         return total
 
@@ -116,9 +101,7 @@ class Transporter(object):
                 self.input_proc_guids.add(process_id)
                 total.append(proc)
 
-            if process_id not in self.input_recursed_guids:
-                total.extend(self.traverse_down(process_id))
-            self.input_recursed_guids.add(process_id)
+            total.extend(self.traverse_down(process_id))
 
         return total
 
@@ -134,8 +117,6 @@ class Transporter(object):
 
         total.extend(self.traverse_down(process_id))
 
-        print [get_process_id(proc) for proc in total]
-
         for proc in total:
             yield proc
 
@@ -143,8 +124,9 @@ class Transporter(object):
         # TODO: append so that this also grabs process trees when necessary
         for proc in self.input.get_process_docs():
             process_id = get_process_id(proc)
-            self.input_proc_guids.add(get_process_id(proc))
-            yield proc
+            if process_id not in self.input_proc_guids:
+                self.input_proc_guids.add(get_process_id(proc))
+                yield proc
 
             if self.traverse_tree:
                 for tree_proc in self.traverse_up_down(proc):
@@ -172,13 +154,10 @@ class Transporter(object):
 
         # get process list
         for proc in self.get_process_docs():
-            print 'main get_process_docs got %s' % get_process_id(proc)
-
             new_md5sums = self.update_md5sums(proc)
             new_sensor_ids = self.update_sensors(proc)
             new_feed_ids = self.update_feeds(proc)
 
-            print 'new md5sums=%s' % new_md5sums
             # output docs, sending binaries & sensors first
             for md5sum in new_md5sums:
                 doc = self.input.get_binary_doc(md5sum)

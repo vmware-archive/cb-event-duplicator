@@ -247,8 +247,6 @@ class SSHInputSource(SSHBase):
         if not query_filter:
             query_filter = self.query
 
-        print 'get_process_docs(%s)' % query_filter
-
         params = {
             'q': query_filter,
             'sort': 'start asc',
