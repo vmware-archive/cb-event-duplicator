@@ -32,6 +32,9 @@ class FileInputSource(object):
     def get_feed_doc(self, feed_key):
         return json.load(open(os.path.join(self.pathname, 'feeds', '%s.json' % feed_key), 'rb'))
 
+    def get_feed_metadata(self, feed_id):
+        return json.load(open(os.path.join(self.pathname, 'feeds', '%s.json' % feed_id), 'rb'))
+
     def get_binary_doc(self, md5sum):
         md5sum = md5sum.lower()
         return json.load(open(os.path.join(self.pathname, 'binaries', get_binary_path(md5sum)), 'rb'))
@@ -75,6 +78,10 @@ class FileOutputSink(object):
 
     def output_feed_doc(self, doc_content):
         open(os.path.join(self.pathname, 'feeds', '%s:%s.json' % (doc_content['feed_name'], doc_content['id'])), 'wb').\
+            write(json_encode(doc_content))
+
+    def output_feed_metadata(self, doc_content):
+        open(os.path.join(self.pathname, 'feeds', '%s.json' % (doc_content['id'],)), 'wb').\
             write(json_encode(doc_content))
 
     def set_data_version(self, version):
