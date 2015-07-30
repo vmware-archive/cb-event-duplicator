@@ -372,10 +372,6 @@ class SSHOutputSink(SSHBase):
         return r
 
     def output_feed_doc(self, doc_content):
-        # TODO: right now we get conflict errors from this. For example:
-        # {"responseHeader":{"status":409,"QTime":1},
-        # "error":{"msg":"version conflict for 4:0c03fb91e17987eed93f60007b08daa0
-        # expected=1506483174486573056 actual=-1","code":409}}
         self.output_doc("/solr/cbfeeds/update/json", doc_content)
 
     def output_binary_doc(self, doc_content):
