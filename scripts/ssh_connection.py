@@ -81,6 +81,7 @@ class Handler(SocketServer.BaseRequestHandler):
         verbose('Tunnel closed from %r' % (peername,))
 
 
+# TODO: refactor this so that this will work with a local Solr instance as well
 class SSHBase(object):
     def __init__(self, username, hostname, port, private_key):
         self.ssh_connection = paramiko.SSHClient()
@@ -227,6 +228,18 @@ class SSHInputSource(SSHBase):
         self.pagination_length = 20
         SSHBase.__init__(self, **kwargs)
 
+    def doc_count_hint(self):
+        query = "/solr/0/select"
+        params = {
+            'q': self.query,
+            'sort': 'start asc',
+            'wt': 'json',
+            'rows': 0
+        }
+        resp = self.solr_get(query, params=params)
+        rj = resp.json()
+        return rj.get('response', {}).get('numFound', 0)
+
     def paginated_get(self, query, params, start=0):
         params['rows'] = self.pagination_length
         params['start'] = start
@@ -315,12 +328,6 @@ class SSHInputSource(SSHBase):
             'os_info': environment_info
         }
 
-    def get_feed_docs(self):
-        pass
-
-    def get_alert_docs(self):
-        pass
-
     def cleanup(self):
         pass
 
@@ -365,6 +372,10 @@ class SSHOutputSink(SSHBase):
         return r
 
     def output_feed_doc(self, doc_content):
+        # TODO: right now we get conflict errors from this. For example:
+        # {"responseHeader":{"status":409,"QTime":1},
+        # "error":{"msg":"version conflict for 4:0c03fb91e17987eed93f60007b08daa0
+        # expected=1506483174486573056 actual=-1","code":409}}
         self.output_doc("/solr/cbfeeds/update/json", doc_content)
 
     def output_binary_doc(self, doc_content):
@@ -383,9 +394,6 @@ class SSHOutputSink(SSHBase):
         if doc_content['sensor_id'] not in self.sensor_id_map:
             print "WARNING: got process document %s without associated sensor data" % get_process_id(doc_content)
         else:
-            print "updating sensor for doc %s - old sensor %d, new sensor %d" % (get_process_id(doc_content),
-                                                                                 doc_content['sensor_id'],
-                                                                                 self.sensor_id_map[doc_content['sensor_id']])
             sensor_id = self.sensor_id_map[doc_content['sensor_id']]
             doc_content = deepcopy(doc_content)
             update_sensor_id_refs(doc_content, sensor_id)
@@ -393,13 +401,17 @@ class SSHOutputSink(SSHBase):
         self.output_doc("/solr/0/update", doc_content)
 
     def output_sensor_info(self, doc_content):
-        # TODO: see if there's already a sensor that matches what we're looking for, and reuse that
+        original_id = doc_content['sensor_info']['id']
+        sensor_id = self.find_db_row_matching('sensor_registrations',
+                                              {'computer_dns_name': doc_content['sensor_info']['computer_dns_name'],
+                                               'computer_name': doc_content['sensor_info']['computer_name']})
 
+        if sensor_id:
+            # there's already a sensor that matches what we're looking for
+            self.sensor_id_map[original_id] = sensor_id
+            return
 
         # we need to first ensure that the sensor build and os_environment are available in the target server
-        # TODO: this assumes that we don't get duplicate sensor info
-        original_id = doc_content['sensor_info']['id']
-
         os_id = self.find_db_row_matching('sensor_os_environments', doc_content['os_info'])
         if not os_id:
             os_id = self.insert_db_row('sensor_os_environments', doc_content['os_info'])

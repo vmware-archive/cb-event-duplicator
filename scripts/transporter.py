@@ -2,26 +2,11 @@ __author__ = 'jgarman'
 
 import logging
 from utils import get_process_id, get_parent_process_id, split_process_id
-
-from types import GeneratorType
-
-def flatten(*stack):
-    stack = list(stack)
-    while stack:
-        try: x = stack[0].next()
-        except StopIteration:
-            stack.pop(0)
-            continue
-        if isinstance(x, GeneratorType): stack.insert(0, x)
-        else: yield x
-
+import sys
 
 log = logging.getLogger(__name__)
 
 class Transporter(object):
-    # TODO: add check for input and output Cb version before executing
-    # - this data is found in the file /usr/share/cb/VERSION
-
     def __init__(self, input_source, output_sink, tree=False):
         self.input_md5set = set()
         self.input_proc_guids = set()
@@ -42,12 +27,18 @@ class Transporter(object):
         for munger in self.mungers:
             doc = munger.munge_document('proc', doc)
 
+        sys.stdout.write('%70s\r' % ("Uploading process %s..." % get_process_id(doc)))
+        sys.stdout.flush()
+
         self.output.output_process_doc(doc)
 
     def output_binary_doc(self, doc):
         for munger in self.mungers:
             # note that the mungers are mutating the data in place, anyway.
             doc = munger.munge_document('binary', doc)
+
+        sys.stdout.write('%70s\r' % ("Uploading binary %s..." % doc['md5']))
+        sys.stdout.flush()
 
         self.output.output_binary_doc(doc)
 
@@ -121,7 +112,6 @@ class Transporter(object):
             yield proc
 
     def get_process_docs(self):
-        # TODO: append so that this also grabs process trees when necessary
         for proc in self.input.get_process_docs():
             process_id = get_process_id(proc)
             if process_id not in self.input_proc_guids:
@@ -153,7 +143,7 @@ class Transporter(object):
             raise Exception("Input and Output versions are incompatible")
 
         # get process list
-        for proc in self.get_process_docs():
+        for i, proc in enumerate(self.get_process_docs()):
             new_md5sums = self.update_md5sums(proc)
             new_sensor_ids = self.update_sensors(proc)
             new_feed_ids = self.update_feeds(proc)
@@ -205,7 +195,6 @@ class CleanseSolrData(object):
         return doc_content
 
 
-# TODO: implement
 class DataAnonymizer(object):
     def __init__(self):
         pass

@@ -3,7 +3,7 @@ __author__ = 'jgarman'
 import os
 import hashlib
 from utils import get_process_id, json_encode
-
+import json
 
 def get_process_path(proc_guid):
     key = hashlib.md5(proc_guid).hexdigest()
@@ -16,6 +16,28 @@ def get_binary_path(md5sum):
 class FileInputSource(object):
     def __init__(self, pathname):
         self.pathname = pathname
+
+    def get_version(self):
+        return open(os.path.join(self.pathname, 'VERSION'), 'rb').read()
+
+    def get_process_docs(self, query_filter=None):
+        # TODO: the query_filter is a code smell... we should push the traversal code into the Source?
+        if query_filter:
+            return
+
+        for root, dirs, files in os.walk(os.path.join(self.pathname, 'procs')):
+            for fn in files:
+                yield json.load(open(os.path.join(root, fn), 'rb'))
+
+    def get_feed_doc(self, feed_key):
+        return json.load(open(os.path.join(self.pathname, 'feeds', '%s.json' % feed_key), 'rb'))
+
+    def get_binary_doc(self, md5sum):
+        md5sum = md5sum.lower()
+        return json.load(open(os.path.join(self.pathname, 'binaries', get_binary_path(md5sum)), 'rb'))
+
+    def get_sensor_doc(self, sensor_id):
+        return json.load(open(os.path.join(self.pathname, 'sensors', '%d.json' % sensor_id), 'rb'))
 
     def cleanup(self):
         pass
@@ -56,7 +78,6 @@ class FileOutputSink(object):
             write(json_encode(doc_content))
 
     def set_data_version(self, version):
-        # TODO: implement
         open(os.path.join(self.pathname, 'VERSION'), 'wb').write(version)
         return True
 
