@@ -4,7 +4,7 @@ import os
 import sys
 import argparse
 import re
-from ssh_connection import SSHInputSource, SSHOutputSink
+from solr_connection import SolrInputSource, SolrOutputSink, SSHConnection, LocalConnection
 from transporter import Transporter, DataAnonymizer
 from file_connection import FileInputSource, FileOutputSink
 import requests
@@ -35,8 +35,10 @@ def initialize_logger(verbose):
 def main():
     parser = argparse.ArgumentParser(description="Transfer data from one Cb server to another")
     parser.add_argument("source", help="Data source - can be a pathname (/tmp/blah), " +
-        "a URL referencing a zip package (http://my.server.com/package.zip), or a server (root@cb5.server:2202)")
-    parser.add_argument("destination", help="Data destination - can be a filepath (/tmp/blah) or a server (root@cb5.server:2202)")
+        "a URL referencing a zip package (http://my.server.com/package.zip), the local Cb server (local), " +
+        "or a remote Cb server (root@cb5.server:2202)")
+    parser.add_argument("destination", help="Data destination - can be a filepath (/tmp/blah), " +
+                                            "the local Cb server (local), or a remote Cb server (root@cb5.server:2202)")
     parser.add_argument("-v", "--verbose", help="Increase output verbosity", action="store_true")
     parser.add_argument("--key", help="SSH private key location", action="store",
                         default=os.path.join(os.path.expanduser('~'), '.ssh', 'id_rsa'))
@@ -52,6 +54,11 @@ def main():
     destination_parts = host_match.match(options.destination)
 
     initialize_logger(options.verbose)
+
+    if options.source == options.destination == 'local':
+        sys.stderr.write("Talk to yourself often?\n\n")
+        parser.print_usage()
+        return 2
 
     if options.source.startswith(('http://', 'https://')):
         with tempfile.NamedTemporaryFile() as handle:
@@ -70,6 +77,9 @@ def main():
             z.extractall(tempdir)
 
             input_source = FileInputSource(tempdir)
+    elif options.source == 'local':
+        input_connection = LocalConnection()
+        input_source = SolrInputSource(input_connection, query=options.query)
     elif source_parts:
         port_number = 22
         if source_parts.group(4):
@@ -79,20 +89,25 @@ def main():
             parser.print_usage()
             return 2
 
-        input_source = SSHInputSource(username=source_parts.group(1), hostname=source_parts.group(2),
-                                      port=port_number, private_key=options.key, query=options.query)
+        input_connection = SSHConnection(username=source_parts.group(1), hostname=source_parts.group(2),
+                                         port=port_number, private_key=options.key)
+        input_source = SolrInputSource(input_connection, query=options.query)
     else:
         # source_parts is a file path
         input_source = FileInputSource(options.source)
 
-    if not destination_parts:
-        output_sink = FileOutputSink(options.destination)
-    else:
+    if options.destination == 'local':
+        output_connection = LocalConnection()
+        output_sink = SolrOutputSink(output_connection)
+    elif destination_parts:
         port_number = 22
         if destination_parts.group(4):
             port_number = int(destination_parts.group(4))
-        output_sink = SSHOutputSink(username=destination_parts.group(1), hostname=destination_parts.group(2),
-                                    port=port_number, private_key=options.key)
+        output_connection = SSHConnection(username=destination_parts.group(1), hostname=destination_parts.group(2),
+                                          port=port_number, private_key=options.key)
+        output_sink = SolrOutputSink(output_connection)
+    else:
+        output_sink = FileOutputSink(options.destination)
 
     t = Transporter(input_source, output_sink, tree=options.tree)
 

@@ -7,10 +7,10 @@ import json
 
 def get_process_path(proc_guid):
     key = hashlib.md5(proc_guid).hexdigest()
-    return os.path.join(key[:2], '%s.json' % proc_guid)
+    return os.path.join(key[:2].upper(), '%s.json' % proc_guid)
 
 def get_binary_path(md5sum):
-    return os.path.join(md5sum[:2], '%s.json' % md5sum)
+    return os.path.join(md5sum[:2].upper(), '%s.json' % md5sum.lower())
 
 
 class FileInputSource(object):

@@ -81,8 +81,130 @@ class Handler(SocketServer.BaseRequestHandler):
         verbose('Tunnel closed from %r' % (peername,))
 
 
-# TODO: refactor this so that this will work with a local Solr instance as well
-class SSHBase(object):
+class SolrBase(object):
+    def __init__(self, connection):
+        self.connection = connection
+        self.have_cb_conf = False
+        self.dbhandle = None
+
+    def __del__(self):
+        self.close()
+
+    def close(self):
+        self.connection.close()
+
+    def get_cb_conf(self):
+        fp = self.connection.open_file('/etc/cb/cb.conf')
+        self.cb_conf = fp.read()
+        self.have_cb_conf = True
+
+    def get_cb_conf_item(self, item, default=None):
+        retval = default
+        if not self.have_cb_conf:
+            self.get_cb_conf()
+        re_match = re.compile("%s=([^\\n]+)" % item)
+        matches = re_match.search(self.cb_conf)
+
+        if matches:
+            retval = matches.group(1)
+
+        return retval
+
+    def get_db_parameters(self):
+        url = self.get_cb_conf_item('DatabaseURL', None)
+        if not url:
+            raise Exception("Could not get DatabaseURL from remote server")
+
+        db_pattern = re.compile('postgresql\\+psycopg2:\\/\\/([^:]+):([^@]+)@([^:]+):(\d+)/(.*)')
+        db_match = db_pattern.match(url)
+        if db_match:
+            username = db_match.group(1)
+            password = db_match.group(2)
+            hostname = db_match.group(3)
+            remote_port = db_match.group(4)
+            database_name = db_match.group(5)
+
+            return (username, password, hostname, remote_port, database_name)
+
+        raise Exception("Could not connect to database")
+
+    def dbconn(self):
+        """
+        :return: database_connection
+        :rtype: psycopg2.connection
+        """
+        if self.dbhandle:
+            return self.dbhandle
+
+        username, password, hostname, remote_port, database_name = self.get_db_parameters()
+        conn = self.connection.open_db(user=username, password=password, database=database_name, host='127.0.0.1',
+                                       port=remote_port)
+
+        self.dbhandle = conn
+        return conn
+
+    def solr_get(self, path, *args, **kwargs):
+        return self.connection.http_get(path, *args, **kwargs)
+
+    def solr_post(self, path, *args, **kwargs):
+        return self.connection.http_post(path, *args, **kwargs)
+
+    def find_db_row_matching(self, table_name, obj):
+        obj.pop('id', None)
+
+        cursor = self.dbconn().cursor()
+        predicate = ' AND '.join(["%s = %%(%s)s" % (key, key) for key in obj.keys()])
+
+        # FIXME: is there a better way to do this?
+        query = 'SELECT id from %s WHERE %s' % (table_name, predicate)
+        cursor.execute(query, obj)
+
+        row_id = cursor.fetchone()
+        if row_id:
+            return row_id[0]
+        else:
+            return None
+
+    def insert_db_row(self, table_name, obj):
+        obj.pop('id', None)
+
+        cursor = self.dbconn().cursor()
+        fields = ', '.join(obj.keys())
+        values = ', '.join(['%%(%s)s' % x for x in obj])
+        query = 'INSERT INTO %s (%s) VALUES (%s) RETURNING id' % (table_name, fields, values)
+        try:
+            cursor.execute(query, obj)
+            self.dbconn().commit()
+            row_id = cursor.fetchone()[0]
+            return row_id
+        except psycopg2.Error as e:
+            import traceback
+            traceback.print_exc()
+            return None
+
+
+class LocalConnection(object):
+    def __init__(self):
+        # TODO: if for some reason someone has changed SolrPort on their cb server... this is incorrect
+        self.solr_url_base = 'http://127.0.0.1:8080'
+
+    def open_file(self, filename, mode='r'):
+        return open(filename, mode)
+
+    def open_db(self, user, password, database, host, port):
+        return psycopg2.connect(user=user, password=password, database=database, host=host, port=port)
+
+    def http_get(self, path, *args, **kwargs):
+        return requests.get('%s%s' % (self.solr_url_base, path), *args, **kwargs)
+
+    def http_post(self, path, *args, **kwargs):
+        return requests.post('%s%s' % (self.solr_url_base, path), *args, **kwargs)
+
+    def close(self):
+        pass
+
+
+class SSHConnection(object):
     def __init__(self, username, hostname, port, private_key):
         self.ssh_connection = paramiko.SSHClient()
         self.ssh_connection.load_system_host_keys()
@@ -93,12 +215,15 @@ class SSHBase(object):
 
         self.ssh_connection.connect(hostname=hostname, username=username, port=port, look_for_keys=False)
         self.forwarded_connections = []
-        self.have_cb_conf = False
-        self.get_cb_conf()
-        self.dbhandle = None
 
-        solr_forwarded_port = self.forward_tunnel('127.0.0.1', int(self.get_cb_conf_item('SolrPort', 8080)))
+        solr_forwarded_port = self.forward_tunnel('127.0.0.1', 8080)
         self.solr_url_base = 'http://127.0.0.1:%d' % solr_forwarded_port
+
+    def http_get(self, path, *args, **kwargs):
+        return requests.get('%s%s' % (self.solr_url_base, path), *args, **kwargs)
+
+    def http_post(self, path, *args, **kwargs):
+        return requests.post('%s%s' % (self.solr_url_base, path), *args, **kwargs)
 
     def forward_tunnel(self, remote_host, remote_port):
         # this is a little convoluted, but lets me configure things for the Handler
@@ -131,102 +256,16 @@ class SSHBase(object):
     def open_file(self, filename, mode='r'):
         return self.ssh_connection.open_sftp().file(filename, mode=mode)
 
-    def get_cb_conf(self):
-        fp = self.open_file('/etc/cb/cb.conf')
-        self.cb_conf = fp.read()
-        self.have_cb_conf = True
-
-    def get_cb_conf_item(self, item, default=None):
-        retval = default
-        if not self.have_cb_conf:
-            self.get_cb_conf()
-        re_match = re.compile("%s=([^\\n]+)" % item)
-        matches = re_match.search(self.cb_conf)
-
-        if matches:
-            retval = matches.group(1)
-
-        return retval
-
-    @property
-    def dbconn(self):
-        """
-        :return: database_connection
-        :rtype: psycopg2.connection
-        """
-        if self.dbhandle:
-            return self.dbhandle
-
-        url = self.get_cb_conf_item('DatabaseURL', None)
-        if not url:
-            raise Exception("Could not get DatabaseURL from remote server")
-
-        db_pattern = re.compile('postgresql\\+psycopg2:\\/\\/([^:]+):([^@]+)@([^:]+):(\d+)/(.*)')
-        db_match = db_pattern.match(url)
-        if db_match:
-            username = db_match.group(1)
-            password = db_match.group(2)
-            hostname = db_match.group(3)
-            remote_port = db_match.group(4)
-            database_name = db_match.group(5)
-
-            local_port = self.forward_tunnel(remote_host=hostname, remote_port=remote_port)
-            conn = psycopg2.connect(user=username, password=password, database=database_name, host='127.0.0.1',
-                                    port=local_port)
-
-            self.dbhandle = conn
-            return conn
-        else:
-            raise Exception("Could not connect to database")
-
-    def __del__(self):
-        self.close()
-
-    def solr_get(self, path, *args, **kwargs):
-        return requests.get('%s%s' % (self.solr_url_base, path), *args, **kwargs)
-
-    def solr_post(self, path, *args, **kwargs):
-        return requests.post('%s%s' % (self.solr_url_base, path), *args, **kwargs)
-
-    def find_db_row_matching(self, table_name, obj):
-        obj.pop('id', None)
-
-        cursor = self.dbconn.cursor()
-        predicate = ' AND '.join(["%s = %%(%s)s" % (key, key) for key in obj.keys()])
-
-        # FIXME: is there a better way to do this?
-        query = 'SELECT id from %s WHERE %s' % (table_name, predicate)
-        cursor.execute(query, obj)
-
-        row_id = cursor.fetchone()
-        if row_id:
-            return row_id[0]
-        else:
-            return None
-
-    def insert_db_row(self, table_name, obj):
-        obj.pop('id', None)
-
-        cursor = self.dbconn.cursor()
-        fields = ', '.join(obj.keys())
-        values = ', '.join(['%%(%s)s' % x for x in obj])
-        query = 'INSERT INTO %s (%s) VALUES (%s) RETURNING id' % (table_name, fields, values)
-        try:
-            cursor.execute(query, obj)
-            self.dbconn.commit()
-            row_id = cursor.fetchone()[0]
-            return row_id
-        except psycopg2.Error as e:
-            import traceback
-            traceback.print_exc()
-            return None
+    def open_db(self, user, password, database, host, port):
+        local_port = self.forward_tunnel(remote_host=host, remote_port=port)
+        return psycopg2.connect(user=user, password=password, database=database, host=host, port=local_port)
 
 
-class SSHInputSource(SSHBase):
-    def __init__(self, **kwargs):
+class SolrInputSource(SolrBase):
+    def __init__(self, connection, **kwargs):
         self.query = kwargs.pop('query')
         self.pagination_length = 20
-        SSHBase.__init__(self, **kwargs)
+        super(SolrInputSource, self).__init__(connection)
 
     def doc_count_hint(self):
         query = "/solr/0/select"
@@ -302,11 +341,11 @@ class SSHInputSource(SSHBase):
         return docs[0]
 
     def get_version(self):
-        return self.open_file('/usr/share/cb/VERSION').read()
+        return self.connection.open_file('/usr/share/cb/VERSION').read()
 
     def get_sensor_doc(self, sensor_id):
         try:
-            conn = self.dbconn
+            conn = self.dbconn()
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute('SELECT * FROM sensor_registrations WHERE id=%s',(sensor_id,))
             sensor_info = cur.fetchone()
@@ -332,16 +371,16 @@ class SSHInputSource(SSHBase):
         pass
 
 
-class SSHOutputSink(SSHBase):
-    def __init__(self, **kwargs):
-        SSHBase.__init__(self, **kwargs)
+class SolrOutputSink(SolrBase):
+    def __init__(self, connection):
+        super(SolrOutputSink, self).__init__(connection)
         self.existing_md5s = set()
         self.sensor_id_map = {}
         self.sensor_os_map = {}
         self.sensor_build_map = {}
 
     def set_data_version(self, version):
-        target_version = self.open_file('/usr/share/cb/VERSION').read()
+        target_version = self.connection.open_file('/usr/share/cb/VERSION').read()
         if version.strip() != target_version.strip():
             return False
 
@@ -433,9 +472,9 @@ class SSHOutputSink(SSHBase):
 
 
 if __name__ == '__main__':
-    c = SSHInputSource(username='root', hostname='cb5.wedgie.org', port=2202, private_key=None,
-                       query='process_name:chrome.exe')
-    conn = c.dbconn
+    s = SSHConnection(username='root', hostname='cb5.wedgie.org', port=2202, private_key=None)
+    c = SolrInputSource(s, query='process_name:chrome.exe')
+    conn = c.dbconn()
 
     from IPython import embed
     embed()
