@@ -27,7 +27,7 @@ class Transporter(object):
         for munger in self.mungers:
             doc = munger.munge_document('proc', doc)
 
-        sys.stdout.write('%70s\r' % ("Uploading process %s..." % get_process_id(doc)))
+        sys.stdout.write('%-70s\r' % ("Uploading process %s..." % get_process_id(doc)))
         sys.stdout.flush()
 
         self.output.output_process_doc(doc)
@@ -43,7 +43,7 @@ class Transporter(object):
             # note that the mungers are mutating the data in place, anyway.
             doc = munger.munge_document('binary', doc)
 
-        sys.stdout.write('%70s\r' % ("Uploading binary %s..." % doc['md5']))
+        sys.stdout.write('%-70s\r' % ("Uploading binary %s..." % doc['md5']))
         sys.stdout.flush()
 
         self.output.output_binary_doc(doc)
