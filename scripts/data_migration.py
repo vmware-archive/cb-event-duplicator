@@ -4,9 +4,14 @@ import os
 import sys
 import argparse
 import re
-from solr_connection import SolrInputSource, SolrOutputSink, SSHConnection, LocalConnection
+from solr_endpoint import SolrInputSource, SolrOutputSink, LocalConnection
+try:
+    from ssh_connection import SSHConnection
+    ssh_support = True
+except ImportError:
+    ssh_support = False
 from transporter import Transporter, DataAnonymizer
-from file_connection import FileInputSource, FileOutputSink
+from file_endpoint import FileInputSource, FileOutputSink
 import requests
 import tempfile
 import zipfile
@@ -33,15 +38,17 @@ def initialize_logger(verbose):
 
 
 def main():
+    if ssh_support:
+        ssh_help = ", or a remote Cb server (root@cb5.server:2202)"
+    else:
+        ssh_help = ""
+
     parser = argparse.ArgumentParser(description="Transfer data from one Cb server to another")
     parser.add_argument("source", help="Data source - can be a pathname (/tmp/blah), " +
-        "a URL referencing a zip package (http://my.server.com/package.zip), the local Cb server (local), " +
-        "or a remote Cb server (root@cb5.server:2202)")
+        "a URL referencing a zip package (http://my.server.com/package.zip), the local Cb server (local)%s" % ssh_help)
     parser.add_argument("destination", help="Data destination - can be a filepath (/tmp/blah), " +
-                                            "the local Cb server (local), or a remote Cb server (root@cb5.server:2202)")
+                                            "the local Cb server (local)%s" % ssh_help)
     parser.add_argument("-v", "--verbose", help="Increase output verbosity", action="store_true")
-    parser.add_argument("--key", help="SSH private key location", action="store",
-                        default=os.path.join(os.path.expanduser('~'), '.ssh', 'id_rsa'))
     parser.add_argument("--anonymize", help="Anonymize data in transport", action="store_true", default=False)
     parser.add_argument("-q", "--query", help="Source data query (required for server input)", action="store")
     parser.add_argument("--tree", help="Traverse up and down process tree", action="store_true", default=False)
@@ -53,9 +60,13 @@ def main():
     source_parts = host_match.match(options.source)
     destination_parts = host_match.match(options.destination)
 
+    if not ssh_support and (source_parts or destination_parts):
+        sys.stderr.write("paramiko python package required for SSH support. Install via `pip install paramiko`\n")
+        return 2
+
     initialize_logger(options.verbose)
 
-    if options.source == options.destination == 'local':
+    if options.source == options.destination:
         sys.stderr.write("Talk to yourself often?\n\n")
         parser.print_usage()
         return 2
@@ -90,7 +101,7 @@ def main():
             return 2
 
         input_connection = SSHConnection(username=source_parts.group(1), hostname=source_parts.group(2),
-                                         port=port_number, private_key=options.key)
+                                         port=port_number)
         input_source = SolrInputSource(input_connection, query=options.query)
     else:
         # source_parts is a file path
@@ -104,7 +115,7 @@ def main():
         if destination_parts.group(4):
             port_number = int(destination_parts.group(4))
         output_connection = SSHConnection(username=destination_parts.group(1), hostname=destination_parts.group(2),
-                                          port=port_number, private_key=options.key)
+                                          port=port_number)
         output_sink = SolrOutputSink(output_connection)
     else:
         output_sink = FileOutputSink(options.destination)
@@ -115,6 +126,8 @@ def main():
         t.add_anonymizer(DataAnonymizer())
 
     t.transport(debug=options.verbose)
+    print "Migration complete!"
+    print t.get_report()
 
 # TODO: add exception wrapper so we clean up after ourselves if there's an error
 if __name__ == '__main__':

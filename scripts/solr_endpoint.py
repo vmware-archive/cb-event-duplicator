@@ -1,84 +1,13 @@
 __author__ = 'jgarman'
 
-import paramiko
-try:
-    import SocketServer
-except ImportError:
-    import socketserver as SocketServer
-import select
-import threading
 import re
 import psycopg2
 import psycopg2.extras
 import requests
-import logging
 import json
 from utils import get_process_id, update_sensor_id_refs, update_feed_id_refs
 from copy import deepcopy
-
-log = logging.getLogger(__name__)
-
-# TODO: replace with proper logging
-def verbose(d):
-    log.debug(d)
-
-
-class ForwardServer (SocketServer.ThreadingTCPServer, threading.Thread):
-    def __init__(self, *args, **kwargs):
-        SocketServer.ThreadingTCPServer.__init__(self, *args, **kwargs)
-        threading.Thread.__init__(self)
-
-    daemon_threads = True
-    allow_reuse_address = True
-
-    def run(self):
-        return self.serve_forever()
-
-
-def get_request_handler(remote_host, remote_port, transport):
-    class SubHandler(Handler):
-        chain_host = remote_host
-        chain_port = int(remote_port)
-        ssh_transport = transport
-
-    return SubHandler
-
-
-class Handler(SocketServer.BaseRequestHandler):
-    def handle(self):
-        try:
-            chan = self.ssh_transport.open_channel('direct-tcpip',
-                                                   (self.chain_host, self.chain_port),
-                                                   self.request.getpeername())
-        except Exception as e:
-            verbose('Incoming request to %s:%d failed: %s' % (self.chain_host,
-                                                              self.chain_port,
-                                                              repr(e)))
-            return
-        if chan is None:
-            verbose('Incoming request to %s:%d was rejected by the SSH server.' %
-                    (self.chain_host, self.chain_port))
-            return
-
-        verbose('Connected!  Tunnel open %r -> %r -> %r' % (self.request.getpeername(),
-                                                            chan.getpeername(), (self.chain_host, self.chain_port)))
-        while True:
-            r, w, x = select.select([self.request, chan], [], [])
-            if self.request in r:
-                data = self.request.recv(1024)
-                if len(data) == 0:
-                    break
-                chan.send(data)
-            if chan in r:
-                data = chan.recv(1024)
-                if len(data) == 0:
-                    break
-                self.request.send(data)
-
-        peername = self.request.getpeername()
-        chan.close()
-        self.request.close()
-        verbose('Tunnel closed from %r' % (peername,))
+from collections import defaultdict
 
 
 class SolrBase(object):
@@ -203,62 +132,8 @@ class LocalConnection(object):
     def close(self):
         pass
 
-
-class SSHConnection(object):
-    def __init__(self, username, hostname, port, private_key):
-        self.ssh_connection = paramiko.SSHClient()
-        self.ssh_connection.load_system_host_keys()
-        self.ssh_connection.set_missing_host_key_policy(paramiko.WarningPolicy())
-
-        if private_key: # TODO: fill in, if we need it.
-            pass
-
-        self.ssh_connection.connect(hostname=hostname, username=username, port=port, look_for_keys=False)
-        self.forwarded_connections = []
-
-        solr_forwarded_port = self.forward_tunnel('127.0.0.1', 8080)
-        self.solr_url_base = 'http://127.0.0.1:%d' % solr_forwarded_port
-
-    def http_get(self, path, *args, **kwargs):
-        return requests.get('%s%s' % (self.solr_url_base, path), *args, **kwargs)
-
-    def http_post(self, path, *args, **kwargs):
-        return requests.post('%s%s' % (self.solr_url_base, path), *args, **kwargs)
-
-    def forward_tunnel(self, remote_host, remote_port):
-        # this is a little convoluted, but lets me configure things for the Handler
-        # object.  (SocketServer doesn't give Handlers any way to access the outer
-        # server normally.)
-
-        transport = self.ssh_connection.get_transport()
-
-        local_port = 12001
-        conn = None
-        while not conn and local_port < 65536:
-            try:
-                conn = ForwardServer(('127.0.0.1', local_port),
-                                     get_request_handler(remote_host, remote_port, transport))
-            except:
-                local_port += 1
-
-        if conn:
-            conn.daemon = True
-            conn.start()
-            self.forwarded_connections.append(conn)
-            return local_port
-
-        raise Exception("Cannot find open local port")
-
-    def close(self):
-        for conn in self.forwarded_connections:
-            conn.shutdown()
-
-    def open_file(self, filename, mode='r'):
-        return self.ssh_connection.open_sftp().file(filename, mode=mode)
-
-    def open_db(self, user, password, database, host, port):
-        local_port = self.forward_tunnel(remote_host=host, remote_port=port)
-        return psycopg2.connect(user=user, password=password, database=database, host=host, port=local_port)
+    def __str__(self):
+        return "Local Cb datastore"
 
 
 class SolrInputSource(SolrBase):
@@ -397,6 +272,14 @@ class SolrOutputSink(SolrBase):
         self.sensor_os_map = {}
         self.sensor_build_map = {}
 
+        self.written_docs = defaultdict(int)
+        self.new_metadata = defaultdict(list)
+        self.doc_endpoints = {
+            'binary': '/solr/cbmodules/update/json',
+            'proc': '/solr/0/update',
+            'feed': '/solr/cbfeeds/update/json'
+        }
+
     def set_data_version(self, version):
         target_version = self.connection.open_file('/usr/share/cb/VERSION').read()
         if version.strip() != target_version.strip():
@@ -420,10 +303,14 @@ class SolrOutputSink(SolrBase):
             return None
         return docs[0]
 
-    def output_doc(self, url, doc_content):
+    def output_doc(self, doc_type, doc_content):
         args = {"add": {"commitWithin": 5000, "doc": doc_content}}
         headers = {'content-type': 'application/json; charset=utf8'}
-        r = self.solr_post(url, data=json.dumps(args), headers=headers, timeout=60)
+        r = self.solr_post(self.doc_endpoints[doc_type],
+                           data=json.dumps(args), headers=headers, timeout=60)
+
+        self.written_docs[doc_type] += 1
+
         if not r.ok:
             print "ERROR:", r.content
         return r
@@ -437,7 +324,7 @@ class SolrOutputSink(SolrBase):
             doc_content = deepcopy(doc_content)
             update_feed_id_refs(doc_content, feed_id)
 
-        self.output_doc("/solr/cbfeeds/update/json", doc_content)
+        self.output_doc("feed", doc_content)
 
     def output_binary_doc(self, doc_content):
         md5sum = doc_content.get('md5').upper()
@@ -448,7 +335,7 @@ class SolrOutputSink(SolrBase):
             self.existing_md5s.add(md5sum)
             return
 
-        self.output_doc("/solr/cbmodules/update/json", doc_content)
+        self.output_doc("binary", doc_content)
 
     def output_process_doc(self, doc_content):
         # first, update the sensor_id in the process document to match the target settings
@@ -459,7 +346,7 @@ class SolrOutputSink(SolrBase):
             doc_content = deepcopy(doc_content)
             update_sensor_id_refs(doc_content, sensor_id)
 
-        self.output_doc("/solr/0/update", doc_content)
+        self.output_doc("proc", doc_content)
 
     def output_feed_metadata(self, doc_content):
         original_id = doc_content['id']
@@ -474,6 +361,7 @@ class SolrOutputSink(SolrBase):
         doc_content['display_name'] += ' (added via cb-event-duplicator)'
 
         feed_id = self.insert_db_row('alliance_feeds', doc_content)
+        self.new_metadata['feed'].append(doc_content['name'])
 
         self.feed_id_map[original_id] = feed_id
 
@@ -502,22 +390,24 @@ class SolrOutputSink(SolrBase):
         doc_content['sensor_info']['os_environment_id'] = os_id
         sensor_id = self.insert_db_row('sensor_registrations', doc_content['sensor_info'])
 
+        self.new_metadata['sensor'].append(doc_content['sensor_info']['computer_name'])
         self.sensor_id_map[original_id] = sensor_id
 
     def cleanup(self):
         headers = {'content-type': 'application/json; charset=utf8'}
         args = {}
 
-        self.solr_post("/solr/0/update?commit=true", data=json.dumps(args), headers=headers, timeout=60)
-        self.solr_post("/solr/cbmodules/update/json?commit=true", data=json.dumps(args), headers=headers, timeout=60)
-        self.solr_post("/solr/cbfeeds/update/json?commit=true", data=json.dumps(args), headers=headers, timeout=60)
+        for doc_type in self.doc_endpoints.keys():
+            self.solr_post(self.doc_endpoints[doc_type] + '?commit=true',
+                           data=json.dumps(args), headers=headers, timeout=60)
 
+    def report(self):
+        report_data = "Documents inserted into %s by type:\n" % (self.connection,)
+        for key in self.written_docs.keys():
+            report_data += " %8s: %d\n" % (key, self.written_docs[key])
+        for key in self.new_metadata.keys():
+            report_data += "New %ss created in %s:\n" % (key, self.connection)
+            for value in self.new_metadata[key]:
+                report_data += " %s\n" % value
 
-if __name__ == '__main__':
-    s = SSHConnection(username='root', hostname='cb5.wedgie.org', port=2202, private_key=None)
-    c = SolrInputSource(s, query='process_name:chrome.exe')
-    conn = c.dbconn()
-
-    from IPython import embed
-    embed()
-    c.close()
+        return report_data
