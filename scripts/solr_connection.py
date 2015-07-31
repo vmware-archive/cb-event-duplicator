@@ -13,7 +13,7 @@ import psycopg2.extras
 import requests
 import logging
 import json
-from utils import get_process_id, update_sensor_id_refs
+from utils import get_process_id, update_sensor_id_refs, update_feed_id_refs
 from copy import deepcopy
 
 log = logging.getLogger(__name__)
@@ -325,6 +325,23 @@ class SolrInputSource(SolrBase):
 
         return docs[0]
 
+    def get_feed_metadata(self, feed_id):
+        try:
+            conn = self.dbconn()
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute('SELECT id,name,display_name,feed_url,summary,icon,provider_url,tech_data,category,icon_small FROM alliance_feeds WHERE id=%s', (feed_id,))
+            feed_info = cur.fetchone()
+            if not feed_info:
+                return None
+
+            conn.commit()
+        except:
+            import traceback
+            traceback.print_exc()
+            return None
+
+        return feed_info
+
     def get_binary_doc(self, md5sum):
         query = "/solr/cbmodules/select"
         params = {
@@ -374,6 +391,7 @@ class SolrInputSource(SolrBase):
 class SolrOutputSink(SolrBase):
     def __init__(self, connection):
         super(SolrOutputSink, self).__init__(connection)
+        self.feed_id_map = {}
         self.existing_md5s = set()
         self.sensor_id_map = {}
         self.sensor_os_map = {}
@@ -411,6 +429,14 @@ class SolrOutputSink(SolrBase):
         return r
 
     def output_feed_doc(self, doc_content):
+        if doc_content['feed_id'] not in self.feed_id_map:
+            print "WARNING: got feed document %s:%s without associated feed metadata" % (doc_content['feed_name'],
+                                                                                         doc_content['id'])
+        else:
+            feed_id = self.feed_id_map[doc_content['feed_id']]
+            doc_content = deepcopy(doc_content)
+            update_feed_id_refs(doc_content, feed_id)
+
         self.output_doc("/solr/cbfeeds/update/json", doc_content)
 
     def output_binary_doc(self, doc_content):
@@ -434,6 +460,22 @@ class SolrOutputSink(SolrBase):
             update_sensor_id_refs(doc_content, sensor_id)
 
         self.output_doc("/solr/0/update", doc_content)
+
+    def output_feed_metadata(self, doc_content):
+        original_id = doc_content['id']
+        feed_id = self.find_db_row_matching('alliance_feeds', {'name': doc_content['name']})
+        if feed_id:
+            self.feed_id_map[original_id] = feed_id
+            return
+
+        doc_content.pop('id', None)
+        doc_content['manually_added'] = True
+        doc_content['enabled'] = False
+        doc_content['display_name'] += ' (added via cb-event-duplicator)'
+
+        feed_id = self.insert_db_row('alliance_feeds', doc_content)
+
+        self.feed_id_map[original_id] = feed_id
 
     def output_sensor_info(self, doc_content):
         original_id = doc_content['sensor_info']['id']

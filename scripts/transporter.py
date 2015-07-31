@@ -17,6 +17,7 @@ class Transporter(object):
 
         self.seen_sensor_ids = set()
         self.seen_feeds = set()
+        self.seen_feed_ids = set()
 
         self.traverse_tree = tree
 
@@ -35,6 +36,13 @@ class Transporter(object):
     def output_feed_doc(self, doc):
         for munger in self.mungers:
             doc = munger.munge_document('feed', doc)
+
+        # check if we have seen this feed_id before
+        feed_id = doc['feed_id']
+        if feed_id not in self.seen_feed_ids:
+            feed_metadata = self.input.get_feed_metadata(feed_id)
+            self.output.output_feed_metadata(feed_metadata)
+            self.seen_feed_ids.add(feed_id)
 
         self.output.output_feed_doc(doc)
 
