@@ -55,3 +55,13 @@ def update_sensor_id_refs(proc, new_id):
         proc['unique_id'] = new_unique_id
 
     return proc
+
+def update_feed_id_refs(feed_data, new_id):
+    # this function will mutate feed in-place
+    feed_data['feed_id'] = new_id
+
+    (_, doc_id) = feed_data['unique_id'].split(':')
+
+    feed_data['unique_id'] = '%s:%s' % (new_id, doc_id)
+
+    return feed_data

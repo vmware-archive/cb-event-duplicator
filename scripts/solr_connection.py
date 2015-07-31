@@ -13,7 +13,7 @@ import psycopg2.extras
 import requests
 import logging
 import json
-from utils import get_process_id, update_sensor_id_refs
+from utils import get_process_id, update_sensor_id_refs, update_feed_id_refs
 from copy import deepcopy
 
 log = logging.getLogger(__name__)
@@ -429,6 +429,14 @@ class SolrOutputSink(SolrBase):
         return r
 
     def output_feed_doc(self, doc_content):
+        if doc_content['feed_id'] not in self.feed_id_map:
+            print "WARNING: got feed document %s:%s without associated feed metadata" % (doc_content['feed_name'],
+                                                                                         doc_content['id'])
+        else:
+            feed_id = self.feed_id_map[doc_content['feed_id']]
+            doc_content = deepcopy(doc_content)
+            update_feed_id_refs(doc_content, feed_id)
+
         self.output_doc("/solr/cbfeeds/update/json", doc_content)
 
     def output_binary_doc(self, doc_content):
