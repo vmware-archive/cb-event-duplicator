@@ -4,6 +4,7 @@ import os
 import hashlib
 from utils import get_process_id, json_encode
 import json
+from collections import defaultdict
 
 def get_process_path(proc_guid):
     key = hashlib.md5(proc_guid).hexdigest()
@@ -61,28 +62,37 @@ class FileOutputSink(object):
             for segment in ['%02X' % x for x in range(0,256)]:
                 os.makedirs(os.path.join(pathname, dirname, segment), 0755)
 
+        self.written_docs = defaultdict(int)
+        self.new_metadata = defaultdict(list)
+
+
     def output_process_doc(self, doc_content):
         proc_guid = get_process_id(doc_content)
         pathname = os.path.join(self.pathname, 'procs', get_process_path(proc_guid))
         if os.path.exists(pathname):
             print 'UHOH: process %s already existed, writing twice' % proc_guid
         open(os.path.join(self.pathname, 'procs', get_process_path(proc_guid)), 'wb').write(json_encode(doc_content))
+        self.written_docs['proc'] += 1
 
     def output_binary_doc(self, doc_content):
         md5sum = doc_content.get('md5').lower()
         open(os.path.join(self.pathname, 'binaries', get_binary_path(md5sum)), 'wb').write(json_encode(doc_content))
+        self.written_docs['binary'] += 1
 
     def output_sensor_info(self, doc_content):
         open(os.path.join(self.pathname, 'sensors', '%s.json' % doc_content['sensor_info']['id']), 'wb').\
             write(json_encode(doc_content))
+        self.new_metadata['sensor'].append(doc_content['sensor_info']['computer_name'])
 
     def output_feed_doc(self, doc_content):
         open(os.path.join(self.pathname, 'feeds', '%s:%s.json' % (doc_content['feed_name'], doc_content['id'])), 'wb').\
             write(json_encode(doc_content))
+        self.written_docs['feed'] += 1
 
     def output_feed_metadata(self, doc_content):
         open(os.path.join(self.pathname, 'feeds', '%s.json' % (doc_content['id'],)), 'wb').\
             write(json_encode(doc_content))
+        self.new_metadata['feed'].append(doc_content['name'])
 
     def set_data_version(self, version):
         open(os.path.join(self.pathname, 'VERSION'), 'wb').write(version)
@@ -90,3 +100,14 @@ class FileOutputSink(object):
 
     def cleanup(self):
         pass
+
+    def report(self):
+        report_data = "Documents saved to %s by type:\n" % (self.pathname,)
+        for key in self.written_docs.keys():
+            report_data += " %8s: %d\n" % (key, self.written_docs[key])
+        for key in self.new_metadata.keys():
+            report_data += "New %ss created in %s:\n" % (key, self.pathname)
+            for value in self.new_metadata[key]:
+                report_data += " %s\n" % value
+
+        return report_data

@@ -188,6 +188,13 @@ class Transporter(object):
         self.input.cleanup()
         self.output.cleanup()
 
+        sys.stdout.write('%-70s\r' % "")
+        sys.stdout.flush()
+
+
+    def get_report(self):
+        return self.output.report()
+
 
 class CleanseSolrData(object):
     def __init__(self):
