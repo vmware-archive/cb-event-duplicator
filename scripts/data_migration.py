@@ -60,6 +60,10 @@ def main():
     source_parts = host_match.match(options.source)
     destination_parts = host_match.match(options.destination)
 
+    if not ssh_support and (source_parts or destination_parts):
+        sys.stderr.write("paramiko python package required for SSH support. Install via `pip install paramiko`\n")
+        return 2
+
     initialize_logger(options.verbose)
 
     if options.source == options.destination:
@@ -88,9 +92,6 @@ def main():
         input_connection = LocalConnection()
         input_source = SolrInputSource(input_connection, query=options.query)
     elif source_parts:
-        if not ssh_support:
-            sys.stderr.write("paramiko Python package required for SSH support. Install via `pip install paramiko`\n")
-            return 2
         port_number = 22
         if source_parts.group(4):
             port_number = int(source_parts.group(4))
@@ -110,9 +111,6 @@ def main():
         output_connection = LocalConnection()
         output_sink = SolrOutputSink(output_connection)
     elif destination_parts:
-        if not ssh_support:
-            sys.stderr.write("paramiko Python package required for SSH support. Install via `pip install paramiko`\n")
-            return 2
         port_number = 22
         if destination_parts.group(4):
             port_number = int(destination_parts.group(4))
