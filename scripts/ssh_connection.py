@@ -10,6 +10,7 @@ import threading
 import requests
 import logging
 import getpass
+import psycopg2
 
 log = logging.getLogger(__name__)
 
