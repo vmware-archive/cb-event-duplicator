@@ -2,18 +2,33 @@
 
 Extract events from one Carbon Black server and send them to another server - useful for demo/testing purposes
 
-This script is in **BETA** testing and requires some manual setup. You can run this on a Cb server locally or any other
-platform that has Python 2.6+ and the following Python packages:
+## Overview & Requirements
 
-* paramiko (requires openssl-devel and python-devel)
-* psycopg2 (requires postgresql-devel and python-devel)
+This script is in **BETA** testing and requires some manual setup. You can run this on a Cb server locally or any other
+platform that has Python 2.6+ and the `psycopg2` package (used to talk to the PostgreSQL server; already installed
+on a Cb server).
+
+Optionally, you can also install the `paramiko` package to enable SSH support - allowing you to use a remote Cb server
+as a source or destination for extracted event data.
+
+## Installation
+
+This is a pip-installable package. You can install it via:
+
+```
+python setup.py install
+```
+
+Once the package is installed, you will have a new script in your $PATH: `cb-event-duplicator`.
+
+## Usage
 
 Command line usage:
 
 ```
-usage: data_migration.py [-h] [-v] [--key KEY] [--anonymize] [-q QUERY]
-                         [--tree]
-                         source destination
+usage: cb-event-duplicator [-h] [-v] [--key KEY] [--anonymize] [-q QUERY]
+                           [--tree]
+                           source destination
 
 Transfer data from one Cb server to another
 
@@ -39,15 +54,15 @@ optional arguments:
 
 Examples:
 
-* `python data_migration.py http://server.com/package.zip local`
+* `cb-event-duplicator http://server.com/package.zip local`
 
   Will import the events from the zip file located at http://server.com/package.zip into your local Cb server.
   The zip file is simply a packaged version of the directory tree created by this tool.
 
-* `python data_migration.py --tree -q "process_name:googleupdate.exe" —anonymize root@172.22.10.7 /tmp/blah`
+* `cb-event-duplicator --tree -q "process_name:googleupdate.exe" —anonymize root@172.22.10.7 /tmp/blah`
 
   Takes all processes that match “process_name:googleupdate.exe” and their parents/children and saves them all to `/tmp/blah`
 
-* `python data_migration.py --tree -q "process_name:googleupdate.exe" —anonymize root@172.22.10.7 root@172.22.5.118`
+* `cb-event-duplicator --tree -q "process_name:googleupdate.exe" —anonymize root@172.22.10.7 root@172.22.5.118`
 
   Same as above, just copies directly to the 172.22.5.118 server instead of saving the files to the local disk
