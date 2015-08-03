@@ -4,20 +4,20 @@ import sys
 import argparse
 import re
 
-from cbopensource.eventduplicator.lib import SolrInputSource, SolrOutputSink, LocalConnection
+from lib.solr_endpoint import SolrInputSource, SolrOutputSink, LocalConnection
 
 try:
-    from cbopensource.eventduplicator.lib import SSHConnection
+    from lib.ssh_connection import SSHConnection
     ssh_support = True
 except ImportError:
     ssh_support = False
-from cbopensource.eventduplicator.lib import Transporter, DataAnonymizer
-from cbopensource.eventduplicator.lib import FileInputSource, FileOutputSink
+from lib.transporter import Transporter, DataAnonymizer
+from lib.file_endpoint import FileInputSource, FileOutputSink
+from lib import main_log
 import requests
 import tempfile
 import zipfile
 import logging
-from cbopensource.eventduplicator.lib import main_log
 
 
 def initialize_logger(verbose):
@@ -95,10 +95,6 @@ def main():
         port_number = 22
         if source_parts.group(4):
             port_number = int(source_parts.group(4))
-        if not options.query:
-            sys.stderr.write("Query is required when using SSH source\n\n")
-            parser.print_usage()
-            return 2
 
         input_connection = SSHConnection(username=source_parts.group(1), hostname=source_parts.group(2),
                                          port=port_number)
@@ -106,6 +102,12 @@ def main():
     else:
         # source_parts is a file path
         input_source = FileInputSource(options.source)
+
+    if type(input_source) == SolrInputSource:
+        if not options.query:
+            sys.stderr.write("Query is required when using Solr as a data source\n\n")
+            parser.print_usage()
+            return 2
 
     if options.destination == 'local':
         output_connection = LocalConnection()
