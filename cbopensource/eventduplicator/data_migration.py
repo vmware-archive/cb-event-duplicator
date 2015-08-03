@@ -1,30 +1,30 @@
 __author__ = 'jgarman'
 
-import os
 import sys
 import argparse
 import re
-from solr_endpoint import SolrInputSource, SolrOutputSink, LocalConnection
+
+from cbopensource.eventduplicator.lib import SolrInputSource, SolrOutputSink, LocalConnection
+
 try:
-    from ssh_connection import SSHConnection
+    from cbopensource.eventduplicator.lib import SSHConnection
     ssh_support = True
 except ImportError:
     ssh_support = False
-from transporter import Transporter, DataAnonymizer
-from file_endpoint import FileInputSource, FileOutputSink
+from cbopensource.eventduplicator.lib import Transporter, DataAnonymizer
+from cbopensource.eventduplicator.lib import FileInputSource, FileOutputSink
 import requests
 import tempfile
 import zipfile
 import logging
+from cbopensource.eventduplicator.lib import main_log
 
 
 def initialize_logger(verbose):
-    _logger = logging.getLogger(__file__)
-
     if verbose:
-        _logger.setLevel(logging.DEBUG)
+        main_log.setLevel(logging.DEBUG)
     else:
-        _logger.setLevel(logging.INFO)
+        main_log.setLevel(logging.INFO)
 
     # create console handler and set level to info
     handler = logging.StreamHandler()
@@ -34,7 +34,7 @@ def initialize_logger(verbose):
         handler.setLevel(logging.INFO)
     formatter = logging.Formatter("%(asctime)-15s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
-    _logger.addHandler(handler)
+    main_log.addHandler(handler)
 
 
 def main():
