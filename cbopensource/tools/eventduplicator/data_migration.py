@@ -4,16 +4,17 @@ import sys
 import argparse
 import re
 
-from lib.solr_endpoint import SolrInputSource, SolrOutputSink, LocalConnection
+from cbopensource.tools.eventduplicator.solr_endpoint import SolrInputSource, SolrOutputSink, LocalConnection
+from cbopensource.tools.eventduplicator.transporter import Transporter, DataAnonymizer
+from cbopensource.tools.eventduplicator.file_endpoint import FileInputSource, FileOutputSink
+from cbopensource.tools.eventduplicator import main_log
 
 try:
-    from lib.ssh_connection import SSHConnection
+    from cbopensource.tools.eventduplicator.ssh_connection import SSHConnection
     ssh_support = True
 except ImportError:
     ssh_support = False
-from lib.transporter import Transporter, DataAnonymizer
-from lib.file_endpoint import FileInputSource, FileOutputSink
-from lib import main_log
+
 import requests
 import tempfile
 import zipfile
@@ -127,10 +128,14 @@ def main():
     if options.anonymize:
         t.add_anonymizer(DataAnonymizer())
 
-    t.transport(debug=options.verbose)
+    try:
+        t.transport(debug=options.verbose)
+    except KeyboardInterrupt:
+        print "\nMigration interrupted. Processed:"
+        print t.get_report()
+        return 1
+
     print "Migration complete!"
     print t.get_report()
+    return 0
 
-# TODO: add exception wrapper so we clean up after ourselves if there's an error
-if __name__ == '__main__':
-    sys.exit(main())

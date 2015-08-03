@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name='cb-event-duplicator',
     version='1.0',
-    packages=['cbopensource', 'cbopensource.eventduplicator', 'cbopensource.eventduplicator.lib'],
+    packages=['cbopensource', 'cbopensource.tools', 'cbopensource.tools.eventduplicator'],
     url='https://github.com/carbonblack/cb-event-duplicator',
     license='MIT',
     author='Bit9 + Carbon Black Developer Network',
@@ -17,7 +17,7 @@ setup(
         'ssh': ['paramiko']
     },
     entry_points = {
-        'console_scripts': ['cb-event-duplicator=cbopensource.eventduplicator.data_migration:main']
+        'console_scripts': ['cb-event-duplicator=cbopensource.tools.eventduplicator.data_migration:main']
     },
     classifiers=[
         'Development Status :: 4 - Beta',
