@@ -118,6 +118,7 @@ class LocalConnection(object):
     def __init__(self):
         # TODO: if for some reason someone has changed SolrPort on their cb server... this is incorrect
         self.solr_url_base = 'http://127.0.0.1:8080'
+        self.session = requests.Session()
 
     def open_file(self, filename, mode='r'):
         return open(filename, mode)
@@ -126,10 +127,10 @@ class LocalConnection(object):
         return psycopg2.connect(user=user, password=password, database=database, host=host, port=port)
 
     def http_get(self, path, *args, **kwargs):
-        return requests.get('%s%s' % (self.solr_url_base, path), *args, **kwargs)
+        return self.session.get('%s%s' % (self.solr_url_base, path), *args, **kwargs)
 
     def http_post(self, path, *args, **kwargs):
-        return requests.post('%s%s' % (self.solr_url_base, path), *args, **kwargs)
+        return self.session.post('%s%s' % (self.solr_url_base, path), *args, **kwargs)
 
     def close(self):
         pass

@@ -84,6 +84,7 @@ class SSHConnection(object):
         self.ssh_connection.load_system_host_keys()
         self.ssh_connection.set_missing_host_key_policy(paramiko.WarningPolicy())
         self.name = "%s@%s:%d" % (username, hostname, port)
+        self.session = requests.Session()
 
         connected = False
         password = None
@@ -107,10 +108,10 @@ class SSHConnection(object):
         self.solr_url_base = 'http://127.0.0.1:%d' % solr_forwarded_port
 
     def http_get(self, path, *args, **kwargs):
-        return requests.get('%s%s' % (self.solr_url_base, path), *args, **kwargs)
+        return self.session.get('%s%s' % (self.solr_url_base, path), *args, **kwargs)
 
     def http_post(self, path, *args, **kwargs):
-        return requests.post('%s%s' % (self.solr_url_base, path), *args, **kwargs)
+        return self.session.post('%s%s' % (self.solr_url_base, path), *args, **kwargs)
 
     def forward_tunnel(self, remote_host, remote_port):
         # this is a little convoluted, but lets me configure things for the Handler
