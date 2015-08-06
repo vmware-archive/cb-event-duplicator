@@ -21,6 +21,19 @@ python setup.py install
 
 Once the package is installed, you will have a new script in your $PATH: `cb-event-duplicator`.
 
+### Optional SSH support
+
+If you are installing on a Cb server (running CentOS 6) and want to enable the optional SSH support to transparently
+send or receive events via an SSH tunnel to another Cb server, then you will have to install the Python `paramiko` package.
+
+To install this package on a Cb server, you need to run the following commands to install the prerequisite packages:
+
+```
+yum install -y openssl-devel python-devel gcc
+easy_install pip
+pip install paramiko
+```
+
 ## Usage
 
 Command line usage:
