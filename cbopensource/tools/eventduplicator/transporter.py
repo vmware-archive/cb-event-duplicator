@@ -156,6 +156,78 @@ class Transporter(object):
         self.seen_feeds |= feed_lookup
         return retval
 
+    def generate_fake_sensor(self, sensor_id):
+        import datetime
+        sensor = {  'build_info':
+                        {'architecture': 32,
+                        'build_version': 50106,
+                        'id': 9,
+                        'installer_avail': True,
+                        'major_version': 5,
+                        'minor_version': 0,
+                        'patch_version': 0,
+                        'upgrader_avail': True,
+                        'version_string': '005.000.000.50106'},
+                    'os_info':
+                        {'architecture': 32,
+                         'display_string': 'Windows 7 Ultimate Edition Service Pack 1, 32-bit',
+                         'id': 1,
+                         'major_version': 6,
+                         'minor_version': 1,
+                         'os_type': 1,
+                         'product_type': 1,
+                         'service_pack': 'Service Pack 1',
+                         'suite_mask': 256},
+                    'sensor_info':
+                        {'boot_id': 17L,
+                         'build_id': 9,
+                         'clock_delta': 2654783L,
+                         'computer_dns_name': 'sensor%d' % sensor_id ,
+                         'computer_name': 'sensor%d' % sensor_id,
+                         'computer_sid': 'S-1-5-21-2002419555-2189168078-3210101973',
+                         'cookie': 1962833602,
+                         'display': True,
+                         'emet_dump_flags': None,
+                         'emet_exploit_action': None,
+                         'emet_is_gpo': False,
+                         'emet_process_count': 0,
+                         'emet_report_setting': None,
+                         'emet_telemetry_path': None,
+                         'emet_version': None,
+                         'event_log_flush_time': None,
+                         'group_id': 1,
+                         'id': sensor_id,
+                         'last_checkin_time': datetime.datetime(2015, 6, 30, 6, 9, 15, 570570),
+                         'last_update': datetime.datetime(2015, 6, 30, 6, 9, 18, 170552),
+                         'license_expiration': datetime.datetime(1990, 1, 1, 0, 0),
+                         'network_adapters': '192.168.230.246,000c29e862e6|192.168.230.5,000c29e862dc|',
+                         'network_isolation_enabled': False,
+                         'next_checkin_time': datetime.datetime(2015, 6, 30, 6, 9, 45, 564598),
+                         'node_id': 0,
+                         'notes': None,
+                         'num_eventlog_bytes': 400L,
+                         'num_storefiles_bytes': 10304408L,
+                         'os_environment_id': 1,
+                         'parity_host_id': 2L,
+                         'physical_memory_size': 1073209344L,
+                         'power_state': 0,
+                         'registration_time': datetime.datetime(2015, 1, 23, 15, 39, 54, 911720),
+                         'restart_queued': False,
+                         'sensor_health_message': 'Healthy',
+                         'sensor_health_status': 100,
+                         'sensor_uptime': 2976455L,
+                         'session_token': 0,
+                         'supports_2nd_gen_modloads': False,
+                         'supports_cblr': True,
+                         'supports_isolation': True,
+                         'systemvolume_free_size': 49276923904L,
+                         'systemvolume_total_size': 64422408192L,
+                         'uninstall': False,
+                         'uninstalled': None,
+                         'uptime': 340776L}}
+        return sensor
+
+
     def transport(self, debug=False):
         # TODO: multithread this so we have some parallelization
 
@@ -183,10 +255,16 @@ class Transporter(object):
             # TODO: right now we don't munge sensor or feed documents
             for sensor in new_sensor_ids:
                 doc = self.input.get_sensor_doc(sensor)
-                if doc:
-                    self.output_sensor_info(doc)
-                else:
+                f = file('/tmp/ben', 'wb')
+                import pprint
+                f.write(pprint.pformat(doc))
+                f.close()
+                if not doc:
                     log.warning("Could not retrieve sensor info for sensor id %s from source" % sensor)
+                    doc = self.generate_fake_sensor(sensor)
+
+                self.output_sensor_info(doc)
+
 
             for feed in new_feed_ids:
                 doc = self.input.get_feed_doc(feed)

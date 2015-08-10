@@ -248,7 +248,7 @@ class SolrInputSource(SolrBase):
             cur.execute('SELECT * FROM sensor_os_environments WHERE id=%s', (sensor_info['os_environment_id'],))
             environment_info = cur.fetchone()
             conn.commit()
-        except:
+        except Exception as e:
             log.error("Error getting sensor data for sensor id %s: %s" % (sensor_id, e.message))
             return None
 
