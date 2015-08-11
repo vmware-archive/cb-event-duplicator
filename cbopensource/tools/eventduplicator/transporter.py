@@ -200,7 +200,7 @@ class Transporter(object):
                          'last_checkin_time': datetime.datetime(2015, 6, 30, 6, 9, 15, 570570),
                          'last_update': datetime.datetime(2015, 6, 30, 6, 9, 18, 170552),
                          'license_expiration': datetime.datetime(1990, 1, 1, 0, 0),
-                         'network_adapters': '192.168.230.246,000c29e862e6|192.168.230.5,000c29e862dc|',
+                         'network_adapters': '192.168.10.241,000c19e962f6|192.168.10.5,000c23b742dc|',
                          'network_isolation_enabled': False,
                          'next_checkin_time': datetime.datetime(2015, 6, 30, 6, 9, 45, 564598),
                          'node_id': 0,
