@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 def get_process_path(proc_guid):
-    key = hashlib.md5(proc_guid).hexdigest()
+    key = hashlib.md5(str(proc_guid)).hexdigest()
     return os.path.join(key[:2].upper(), '%s.json' % proc_guid)
 
 def get_binary_path(md5sum):
