@@ -1,6 +1,7 @@
 __author__ = 'jgarman'
 
 import logging
+import datetime
 from utils import get_process_id, get_parent_process_id, split_process_id
 import sys
 
@@ -157,7 +158,6 @@ class Transporter(object):
         return retval
 
     def generate_fake_sensor(self, sensor_id):
-        import datetime
         sensor = {  'build_info':
                         {'architecture': 32,
                         'build_version': 50106,
@@ -255,10 +255,6 @@ class Transporter(object):
             # TODO: right now we don't munge sensor or feed documents
             for sensor in new_sensor_ids:
                 doc = self.input.get_sensor_doc(sensor)
-                f = file('/tmp/ben', 'wb')
-                import pprint
-                f.write(pprint.pformat(doc))
-                f.close()
                 if not doc:
                     log.warning("Could not retrieve sensor info for sensor id %s from source" % sensor)
                     doc = self.generate_fake_sensor(sensor)
