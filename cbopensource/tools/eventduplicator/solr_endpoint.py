@@ -287,9 +287,12 @@ class SolrOutputSink(SolrBase):
         }
 
     def set_data_version(self, version):
-        target_version = self.connection.open_file('/usr/share/cb/VERSION').read()
-        if version.strip() != target_version.strip():
-            return False
+        target_version = self.connection.open_file('/usr/share/cb/VERSION').read().strip()
+        source_major_version = '.'.join(version.split('.')[:2])
+        target_major_version = '.'.join(target_version.split('.')[:2])
+        if source_major_version != target_major_version:
+            log.warning(("Source data was generated from Cb version %s; target is %s. This may not work. "
+                         "Continuing anyway." % (version, target_version)))
 
         return True
 
