@@ -291,7 +291,8 @@ class SolrOutputSink(SolrBase):
         source_major_version = '.'.join(version.split('.')[:2])
         target_major_version = '.'.join(target_version.split('.')[:2])
         if source_major_version != target_major_version:
-            return False
+            log.warning(("Source data was generated from Cb version %s; target is %s. This may not work. "
+                         "Continuing anyway." % (version, target_version)))
 
         return True
 
