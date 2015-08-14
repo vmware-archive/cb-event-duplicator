@@ -261,7 +261,6 @@ class Transporter(object):
 
                 self.output_sensor_info(doc)
 
-
             for feed in new_feed_ids:
                 doc = self.input.get_feed_doc(feed)
                 if doc:
@@ -279,7 +278,6 @@ class Transporter(object):
         sys.stdout.flush()
 
         log.info("Transport complete from %s to %s" % (self.input.connection_name(), self.output.connection_name()))
-
 
     def get_report(self):
         return self.output.report()
