@@ -2,16 +2,7 @@
 
 Extract events from one Carbon Black server and send them to another server - useful for demo/testing purposes
 
-## Overview & Requirements
-
-This script is in **BETA** testing and requires some manual setup. You can run this on a Cb server locally or any other
-platform that has Python 2.6+ and the `psycopg2` package (used to talk to the PostgreSQL server; already installed
-on a Cb server).
-
-Optionally, you can also install the `paramiko` package to enable SSH support - allowing you to use a remote Cb server
-as a source or destination for extracted event data.
-
-## Installation
+## Installation Quickstart
 
 If you want to use this on a Carbon Black server, or any other CentOS 6.x, 7.x or Ubuntu based 64 bit Linux platform, 
 you can use the pre-built binary available from the releases page. This single binary bundles together all the necessary
