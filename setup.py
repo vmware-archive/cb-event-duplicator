@@ -11,7 +11,8 @@ setup(
     description=
         'Extract events from one Carbon Black server and send them to another server - useful for demo/testing purposes',
     install_requires=[
-        'psycopg2'
+        'psycopg2',
+        'requests'
     ],
     extras_require= {
         'ssh': ['paramiko']
