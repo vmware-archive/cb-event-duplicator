@@ -13,7 +13,16 @@ as a source or destination for extracted event data.
 
 ## Installation
 
-This is a pip-installable package. You can install it via:
+If you want to use this on a Carbon Black server, or any other CentOS 6.x, 7.x or Ubuntu based 64 bit Linux platform, 
+you can use the pre-built binary available from the releases page. This single binary bundles together all the necessary
+bits and will not interfere with your system installed Python, so it's highly recommended to use this binary unless you
+plan on modifying the source code.
+
+[Direct Download link v1.1.1](https://github.com/carbonblack/cb-event-duplicator/releases/download/v1.1.1/cb-event-duplicator)
+
+### Source Installation
+
+If you want to install from source, you can install it via:
 
 ```
 python setup.py install
@@ -21,19 +30,8 @@ python setup.py install
 
 Once the package is installed, you will have a new script in your $PATH: `cb-event-duplicator`.
 
-### Optional SSH support
-
-If you are installing on a Cb server (running CentOS 6) and want to enable the optional SSH support to transparently
+If you want to enable the optional SSH support to transparently
 send or receive events via an SSH tunnel to another Cb server, then you will have to install the Python `paramiko` package.
-
-To enable the optional SSH support on a Cb server, you need to run the following commands to install the prerequisite
-packages.
-
-```
-yum install -y openssl-devel python-devel gcc
-easy_install pip
-pip install paramiko
-```
 
 ## Usage
 
