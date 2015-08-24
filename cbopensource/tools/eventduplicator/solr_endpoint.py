@@ -213,7 +213,7 @@ class SolrInputSource(SolrBase):
                 return None
 
             conn.commit()
-        except:
+        except Exception as e:
             log.error("Error getting feed metadata for id %s: %s" % (feed_id, e.message))
             return None
 
