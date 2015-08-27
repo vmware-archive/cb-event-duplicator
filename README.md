@@ -11,6 +11,15 @@ plan on modifying the source code.
 
 [Direct Download link v1.1.1](https://github.com/carbonblack/cb-event-duplicator/releases/download/v1.1.1/cb-event-duplicator)
 
+To download the tool on a Linux machine, run these four commands:
+
+  mkdir -p $HOME/bin
+  cd $HOME/bin
+  wget https://github.com/carbonblack/cb-event-duplicator/releases/download/v1.1.1/cb-event-duplicator
+  chmod +x cb-event-duplicator
+
+That will place the cb-event-duplicator binary in your local user's "bin" directory.
+
 ### Source Installation
 
 If you want to install from source, you can install it via:
