@@ -1,6 +1,8 @@
 # Event extractor/duplicator for Carbon Black
 
-Extract events from one Carbon Black server and send them to another server - useful for demo/testing purposes
+Extract events from one Carbon Black server and send them to another server - useful for demo/testing purposes.
+Note that since this tool works at the SOLR level (underneath the supported API), it does *not* support Carbon Black
+clusters at this time.
 
 ## Installation Quickstart
 
