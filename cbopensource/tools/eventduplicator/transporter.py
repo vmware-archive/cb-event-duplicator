@@ -42,8 +42,10 @@ class Transporter(object):
         feed_id = doc['feed_id']
         if feed_id not in self.seen_feed_ids:
             feed_metadata = self.input.get_feed_metadata(feed_id)
-            self.output.output_feed_metadata(feed_metadata)
-            self.seen_feed_ids.add(feed_id)
+            if feed_metadata:
+                # note that without feed metadata, bad things may happen on the Cb UI side...
+                self.output.output_feed_metadata(feed_metadata)
+                self.seen_feed_ids.add(feed_id)
 
         self.output.output_feed_doc(doc)
 
