@@ -11,14 +11,14 @@ you can use the pre-built binary available from the releases page. This single b
 bits and will not interfere with your system installed Python, so it's highly recommended to use this binary unless you
 plan on modifying the source code.
 
-[Direct Download link v1.1.1](https://github.com/carbonblack/cb-event-duplicator/releases/download/v1.1.1/cb-event-duplicator)
+[Direct Download link v1.1.3](https://github.com/carbonblack/cb-event-duplicator/releases/download/v1.1.3/cb-event-duplicator)
 
 To download the tool on a Linux machine, run these four commands:
 
 ```
   mkdir -p $HOME/bin
   cd $HOME/bin
-  wget https://github.com/carbonblack/cb-event-duplicator/releases/download/v1.1.1/cb-event-duplicator
+  wget https://github.com/carbonblack/cb-event-duplicator/releases/download/v1.1.3/cb-event-duplicator
   chmod +x cb-event-duplicator
 ```
 

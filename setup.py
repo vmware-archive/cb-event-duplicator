@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='cb-event-duplicator',
-    version='1.1.2',
+    version='1.1.3',
     packages=['cbopensource', 'cbopensource.tools', 'cbopensource.tools.eventduplicator'],
     url='https://github.com/carbonblack/cb-event-duplicator',
     license='MIT',
