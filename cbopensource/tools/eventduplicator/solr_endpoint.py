@@ -9,6 +9,7 @@ from utils import get_process_id, update_sensor_id_refs, update_feed_id_refs
 from copy import deepcopy
 from collections import defaultdict
 import logging
+import datetime
 
 log = logging.getLogger(__name__)
 
@@ -286,6 +287,8 @@ class SolrOutputSink(SolrBase):
             'feed': '/solr/cbfeeds/update/json'
         }
 
+        self.now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
     def set_data_version(self, version):
         target_version = self.connection.open_file('/usr/share/cb/VERSION').read().strip()
         source_major_version = '.'.join(version.split('.')[:2])
@@ -354,6 +357,12 @@ class SolrOutputSink(SolrBase):
             sensor_id = self.sensor_id_map[doc_content['sensor_id']]
             doc_content = deepcopy(doc_content)
             update_sensor_id_refs(doc_content, sensor_id)
+
+        # fix up the last_update field
+        last_update = doc_content.get("last_update", None) or self.now
+        doc_content["last_update"] = {"set": last_update}
+
+        doc_content.pop("last_server_update", None)
 
         self.output_doc("proc", doc_content)
 

@@ -291,12 +291,6 @@ class CleanseSolrData(object):
 
     def munge_document(self, doc_type, doc_content):
         doc_content.pop('_version_', None)
-        doc_content.pop('last_update', None)
-        doc_content.pop('last_server_update', None)
-        # TODO: are these commented out for a reason?
-        # TODO: erase parent_unique_id if the parent isn't available in our input dataset
-        #doc.pop('parent_unique_id', None)
-        #doc.pop('terminated', None)
 
         for key in doc_content.keys():
             if key.endswith('_facet'):

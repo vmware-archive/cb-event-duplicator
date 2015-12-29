@@ -19,6 +19,7 @@ import requests
 import tempfile
 import zipfile
 import logging
+import os.path
 
 
 def initialize_logger(verbose):
@@ -36,6 +37,14 @@ def initialize_logger(verbose):
     formatter = logging.Formatter("%(asctime)-15s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     main_log.addHandler(handler)
+
+
+def input_from_zip(fn):
+    tempdir = tempfile.mkdtemp()
+    z = zipfile.ZipFile(fn)
+    z.extractall(tempdir)
+
+    return FileInputSource(tempdir)
 
 
 def main():
@@ -84,11 +93,7 @@ def main():
             handle.flush()
 
             print "Done. Unzipping..."
-            tempdir = tempfile.mkdtemp()
-            z = zipfile.ZipFile(handle.name)
-            z.extractall(tempdir)
-
-            input_source = FileInputSource(tempdir)
+            input_source = input_from_zip(handle.name)
     elif options.source == 'local':
         input_connection = LocalConnection()
         input_source = SolrInputSource(input_connection, query=options.query)
@@ -102,7 +107,15 @@ def main():
         input_source = SolrInputSource(input_connection, query=options.query)
     else:
         # source_parts is a file path
-        input_source = FileInputSource(options.source)
+        if not os.path.exists(options.source):
+            sys.stderr.write("Cannot find file %s\n\n" % options.source)
+            return 2
+
+        if os.path.isdir(options.source):
+            input_source = FileInputSource(options.source)
+        else:
+            print "Unzipping %s into a temporary directory for processing..." % options.source
+            input_source = input_from_zip(options.source)
 
     if type(input_source) == SolrInputSource:
         if not options.query:
