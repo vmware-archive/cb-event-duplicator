@@ -1,11 +1,13 @@
-__author__ = 'jgarman'
-
+from __future__ import absolute_import, division, print_function
 import logging
 import datetime
-from utils import get_process_id, get_parent_process_id, split_process_id
+from cbopensource.tools.eventduplicator.utils import get_process_id, get_parent_process_id
 import sys
 
+__author__ = 'jgarman'
+
 log = logging.getLogger(__name__)
+
 
 class Transporter(object):
     def __init__(self, input_source, output_sink, tree=False):
@@ -27,7 +29,7 @@ class Transporter(object):
 
     def output_process_doc(self, doc):
         for munger in self.mungers:
-            doc = munger.munge_document('proc', doc)
+            doc = munger.munge_document(doc)
 
         sys.stdout.write('%-70s\r' % ("Uploading process %s..." % get_process_id(doc)))
         sys.stdout.flush()
@@ -36,7 +38,7 @@ class Transporter(object):
 
     def output_feed_doc(self, doc):
         for munger in self.mungers:
-            doc = munger.munge_document('feed', doc)
+            doc = munger.munge_document(doc)
 
         # check if we have seen this feed_id before
         feed_id = doc['feed_id']
@@ -52,7 +54,7 @@ class Transporter(object):
     def output_binary_doc(self, doc):
         for munger in self.mungers:
             # note that the mungers are mutating the data in place, anyway.
-            doc = munger.munge_document('binary', doc)
+            doc = munger.munge_document(doc)
 
         sys.stdout.write('%-70s\r' % ("Uploading binary %s..." % doc['md5']))
         sys.stdout.flush()
@@ -62,7 +64,7 @@ class Transporter(object):
     def output_sensor_info(self, doc):
         for munger in self.mungers:
             # note that the mungers are mutating the data in place, anyway.
-            doc['sensor_info'] = munger.munge_document('sensor', doc['sensor_info'])
+            doc['sensor_info'] = munger.munge_document(doc['sensor_info'])
 
         self.output.output_sensor_info(doc)
 
@@ -159,76 +161,73 @@ class Transporter(object):
         self.seen_feeds |= feed_lookup
         return retval
 
-    def generate_fake_sensor(self, sensor_id):
-        sensor = {  'build_info':
-                        {'architecture': 32,
-                        'build_version': 50106,
-                        'id': 9,
-                        'installer_avail': True,
-                        'major_version': 5,
-                        'minor_version': 0,
-                        'patch_version': 0,
-                        'upgrader_avail': True,
-                        'version_string': '005.000.000.50106'},
-                    'os_info':
-                        {'architecture': 32,
-                         'display_string': 'Windows 7 Ultimate Edition Service Pack 1, 32-bit',
-                         'id': 1,
-                         'major_version': 6,
-                         'minor_version': 1,
-                         'os_type': 1,
-                         'product_type': 1,
-                         'service_pack': 'Service Pack 1',
-                         'suite_mask': 256},
-                    'sensor_info':
-                        {'boot_id': 17L,
-                         'build_id': 9,
-                         'clock_delta': 2654783L,
-                         'computer_dns_name': 'sensor%d' % sensor_id ,
-                         'computer_name': 'sensor%d' % sensor_id,
-                         'computer_sid': 'S-1-5-21-2002419555-2189168078-3210101973',
-                         'cookie': 1962833602,
-                         'display': True,
-                         'emet_dump_flags': None,
-                         'emet_exploit_action': None,
-                         'emet_is_gpo': False,
-                         'emet_process_count': 0,
-                         'emet_report_setting': None,
-                         'emet_telemetry_path': None,
-                         'emet_version': None,
-                         'event_log_flush_time': None,
-                         'group_id': 1,
-                         'id': sensor_id,
-                         'last_checkin_time': datetime.datetime(2015, 6, 30, 6, 9, 15, 570570),
-                         'last_update': datetime.datetime(2015, 6, 30, 6, 9, 18, 170552),
-                         'license_expiration': datetime.datetime(1990, 1, 1, 0, 0),
-                         'network_adapters': '192.168.10.241,000c19e962f6|192.168.10.5,000c23b742dc|',
-                         'network_isolation_enabled': False,
-                         'next_checkin_time': datetime.datetime(2015, 6, 30, 6, 9, 45, 564598),
-                         'node_id': 0,
-                         'notes': None,
-                         'num_eventlog_bytes': 400L,
-                         'num_storefiles_bytes': 10304408L,
-                         'os_environment_id': 1,
-                         'parity_host_id': 2L,
-                         'physical_memory_size': 1073209344L,
-                         'power_state': 0,
-                         'registration_time': datetime.datetime(2015, 1, 23, 15, 39, 54, 911720),
-                         'restart_queued': False,
-                         'sensor_health_message': 'Healthy',
-                         'sensor_health_status': 100,
-                         'sensor_uptime': 2976455L,
-                         'session_token': 0,
-                         'supports_2nd_gen_modloads': False,
-                         'supports_cblr': True,
-                         'supports_isolation': True,
-                         'systemvolume_free_size': 49276923904L,
-                         'systemvolume_total_size': 64422408192L,
-                         'uninstall': False,
-                         'uninstalled': None,
-                         'uptime': 340776L}}
+    @staticmethod
+    def generate_fake_sensor(sensor_id):
+        sensor = {'build_info': {'architecture': 32,
+                                 'build_version': 50106,
+                                 'id': 9,
+                                 'installer_avail': True,
+                                 'major_version': 5,
+                                 'minor_version': 0,
+                                 'patch_version': 0,
+                                 'upgrader_avail': True,
+                                 'version_string': '005.000.000.50106'},
+                  'os_info': {'architecture': 32,
+                              'display_string': 'Windows 7 Ultimate Edition Service Pack 1, 32-bit',
+                              'id': 1,
+                              'major_version': 6,
+                              'minor_version': 1,
+                              'os_type': 1,
+                              'product_type': 1,
+                              'service_pack': 'Service Pack 1',
+                              'suite_mask': 256},
+                  'sensor_info': {'boot_id': 17,
+                                  'build_id': 9,
+                                  'clock_delta': 2654783,
+                                  'computer_dns_name': 'sensor%d' % sensor_id,
+                                  'computer_name': 'sensor%d' % sensor_id,
+                                  'computer_sid': 'S-1-5-21-2002419555-2189168078-3210101973',
+                                  'cookie': 1962833602,
+                                  'display': True,
+                                  'emet_dump_flags': None,
+                                  'emet_exploit_action': None,
+                                  'emet_is_gpo': False,
+                                  'emet_process_count': 0,
+                                  'emet_report_setting': None,
+                                  'emet_telemetry_path': None,
+                                  'emet_version': None,
+                                  'event_log_flush_time': None,
+                                  'group_id': 1,
+                                  'id': sensor_id,
+                                  'last_checkin_time': datetime.datetime(2015, 6, 30, 6, 9, 15, 570570),
+                                  'last_update': datetime.datetime(2015, 6, 30, 6, 9, 18, 170552),
+                                  'license_expiration': datetime.datetime(1990, 1, 1, 0, 0),
+                                  'network_adapters': '192.168.10.241,000c19e962f6|192.168.10.5,000c23b742dc|',
+                                  'network_isolation_enabled': False,
+                                  'next_checkin_time': datetime.datetime(2015, 6, 30, 6, 9, 45, 564598),
+                                  'node_id': 0,
+                                  'notes': None,
+                                  'num_eventlog_bytes': 400,
+                                  'num_storefiles_bytes': 10304408,
+                                  'os_environment_id': 1,
+                                  'parity_host_id': 2,
+                                  'physical_memory_size': 1073209344,
+                                  'power_state': 0,
+                                  'registration_time': datetime.datetime(2015, 1, 23, 15, 39, 54, 911720),
+                                  'restart_queued': False,
+                                  'sensor_health_message': 'Healthy',
+                                  'sensor_health_status': 100,
+                                  'sensor_uptime': 2976455,
+                                  'session_token': 0,
+                                  'supports_2nd_gen_modloads': False,
+                                  'supports_cblr': True,
+                                  'supports_isolation': True,
+                                  'systemvolume_free_size': 49276923904,
+                                  'systemvolume_total_size': 64422408192,
+                                  'uninstall': False,
+                                  'uninstalled': None,
+                                  'uptime': 340776}}
         return sensor
-
 
     def transport(self, debug=False):
         # TODO: multithread this so we have some parallelization
@@ -252,13 +251,15 @@ class Transporter(object):
                     new_feed_ids |= self.update_feeds(doc)
                     self.output_binary_doc(doc)
                 else:
-                    log.warning("Could not retrieve MD5sum %s from source" % md5sum)
+                    log.warning("Could not retrieve the binary MD5 %s referenced in the process with ID: %s"
+                                % (md5sum, proc['unique_id']))
 
             # TODO: right now we don't munge sensor or feed documents
             for sensor in new_sensor_ids:
                 doc = self.input.get_sensor_doc(sensor)
                 if not doc:
-                    log.warning("Could not retrieve sensor info for sensor id %s from source" % sensor)
+                    log.warning("Could not retrieve sensor info for sensor id %s referenced in the process with ID: %s"
+                                % (md5sum, proc['unique_id']))
                     doc = self.generate_fake_sensor(sensor)
 
                 self.output_sensor_info(doc)
@@ -268,7 +269,8 @@ class Transporter(object):
                 if doc:
                     self.output_feed_doc(doc)
                 else:
-                    log.warning("Could not retrieve feed document for id %s from source" % feed)
+                    log.warning("Could not retrieve feed document for id %s referenced in the process with ID: %s"
+                                % (md5sum, proc['unique_id']))
 
             self.output_process_doc(proc)
 
@@ -289,7 +291,8 @@ class CleanseSolrData(object):
     def __init__(self):
         pass
 
-    def munge_document(self, doc_type, doc_content):
+    @staticmethod
+    def munge_document(doc_content):
         doc_content.pop('_version_', None)
 
         for key in doc_content.keys():
@@ -307,26 +310,28 @@ class DataAnonymizer(object):
     def translate(s):
         """
         Super dumb translation for anonymizing strings.
+        :param s: input string
         """
         s_new = ''
         for c in s:
             if c == '\\':
                 s_new += c
             else:
-                c = chr((ord(c)-65 + 13)%26 + 65)
+                c = chr((ord(c)-65 + 13) % 26 + 65)
                 s_new += c
         return s_new
 
-    def anonymize(self, doc):
+    @staticmethod
+    def anonymize(doc):
         hostname = doc.get('hostname', '')
         hostname_new = DataAnonymizer.translate(hostname)
         username = doc.get('username', '')
-        username_new = None
 
         translation_usernames = {}
 
         if len(username) > 0:
-            if username.lower() != 'system' and username.lower() != 'local service' and username.lower() != 'network service':
+            if username.lower() != 'system' and username.lower() != 'local service' and username.lower() != \
+                    'network service':
                 pieces = username.split('\\')
                 for piece in pieces:
                     translation_usernames[piece] = DataAnonymizer.translate(piece)
@@ -355,5 +360,5 @@ class DataAnonymizer(object):
 
         return doc
 
-    def munge_document(self, doc_type, doc_content):
+    def munge_document(self, doc_content):
         return self.anonymize(doc_content)

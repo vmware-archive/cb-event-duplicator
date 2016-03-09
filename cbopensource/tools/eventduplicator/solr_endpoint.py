@@ -1,16 +1,16 @@
-__author__ = 'jgarman'
-
+from __future__ import absolute_import, division, print_function
 import re
 import psycopg2
 import psycopg2.extras
 import requests
 import json
-from utils import get_process_id, update_sensor_id_refs, update_feed_id_refs
+from cbopensource.tools.eventduplicator.utils import get_process_id, update_sensor_id_refs, update_feed_id_refs
 from copy import deepcopy
 from collections import defaultdict
 import logging
 import datetime
 
+__author__ = 'jgarman'
 log = logging.getLogger(__name__)
 
 
@@ -19,6 +19,7 @@ class SolrBase(object):
         self.connection = connection
         self.have_cb_conf = False
         self.dbhandle = None
+        self.cb_conf = None
 
     def __del__(self):
         self.close()
@@ -36,7 +37,7 @@ class SolrBase(object):
         if not self.have_cb_conf:
             self.get_cb_conf()
         re_match = re.compile("%s=([^\\n]+)" % item)
-        matches = re_match.search(self.cb_conf)
+        matches = re_match.search(self.cb_conf.decode('utf8'))
 
         if matches:
             retval = matches.group(1)
@@ -57,7 +58,7 @@ class SolrBase(object):
             remote_port = db_match.group(4)
             database_name = db_match.group(5)
 
-            return (username, password, hostname, remote_port, database_name)
+            return username, password, hostname, remote_port, database_name
 
         raise Exception("Could not connect to database")
 
@@ -121,14 +122,16 @@ class LocalConnection(object):
         self.solr_url_base = 'http://127.0.0.1:8080'
         self.session = requests.Session()
 
-    def open_file(self, filename, mode='r'):
+    @staticmethod
+    def open_file(filename, mode='r'):
         return open(filename, mode)
 
-    def open_db(self, user, password, database, host, port):
+    @staticmethod
+    def open_db(user, password, database, host, port):
         return psycopg2.connect(user=user, password=password, database=database, host=host, port=port)
 
-    def http_get(self, path, *args, **kwargs):
-        return self.session.get('%s%s' % (self.solr_url_base, path), *args, **kwargs)
+    def http_get(self, path, **kwargs):
+        return self.session.get('%s%s' % (self.solr_url_base, path), **kwargs)
 
     def http_post(self, path, *args, **kwargs):
         return self.session.post('%s%s' % (self.solr_url_base, path), *args, **kwargs)
@@ -208,14 +211,15 @@ class SolrInputSource(SolrBase):
         try:
             conn = self.dbconn()
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute('SELECT id,name,display_name,feed_url,summary,icon,provider_url,tech_data,category,icon_small FROM alliance_feeds WHERE id=%s', (feed_id,))
+            cur.execute('SELECT id,name,display_name,feed_url,summary,icon,provider_url,tech_data,category,icon_small' +
+                        'FROM alliance_feeds WHERE id=%s', (feed_id,))
             feed_info = cur.fetchone()
             if not feed_info:
                 return None
 
             conn.commit()
         except Exception as e:
-            log.error("Error getting feed metadata for id %s: %s" % (feed_id, e.message))
+            log.error("Error getting feed metadata for id %s: %s" % (feed_id, str(e)))
             return None
 
         return feed_info
@@ -250,7 +254,7 @@ class SolrInputSource(SolrBase):
             environment_info = cur.fetchone()
             conn.commit()
         except Exception as e:
-            log.error("Error getting sensor data for sensor id %s: %s" % (sensor_id, e.message))
+            log.error("Error getting sensor data for sensor id %s: %s" % (sensor_id, str(e)))
             return None
 
         if not sensor_info or not build_info or not environment_info:
@@ -290,7 +294,7 @@ class SolrOutputSink(SolrBase):
         self.now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
     def set_data_version(self, version):
-        target_version = self.connection.open_file('/usr/share/cb/VERSION').read().strip()
+        target_version = (self.connection.open_file('/usr/share/cb/VERSION').read().strip()).decode('utf8')
         source_major_version = '.'.join(version.split('.')[:2])
         target_major_version = '.'.join(target_version.split('.')[:2])
         if source_major_version != target_major_version:
@@ -330,7 +334,7 @@ class SolrOutputSink(SolrBase):
     def output_feed_doc(self, doc_content):
         if doc_content['feed_id'] not in self.feed_id_map:
             log.warning("got feed document %s:%s without associated feed metadata" % (doc_content['feed_name'],
-                                                                                         doc_content['id']))
+                                                                                      doc_content['id']))
         else:
             feed_id = self.feed_id_map[doc_content['feed_id']]
             doc_content = deepcopy(doc_content)

@@ -1,5 +1,4 @@
-__author__ = 'jgarman'
-
+from __future__ import absolute_import, division, print_function
 import paramiko
 try:
     import SocketServer
@@ -12,6 +11,8 @@ import logging
 import getpass
 import psycopg2
 import socket
+
+__author__ = 'jgarman'
 
 log = logging.getLogger(__name__)
 
@@ -48,17 +49,15 @@ class Handler(SocketServer.BaseRequestHandler):
                                                    (self.chain_host, self.chain_port),
                                                    self.request.getpeername())
         except Exception as e:
-            log.debug('Incoming request to %s:%d failed: %s' % (self.chain_host,
-                                                              self.chain_port,
-                                                              repr(e)))
+            log.debug('Incoming request to %s:%d failed: %s' % (self.chain_host, self.chain_port, repr(e)))
             return
         if chan is None:
             log.debug('Incoming request to %s:%d was rejected by the SSH server.' %
-                    (self.chain_host, self.chain_port))
+                      (self.chain_host, self.chain_port))
             return
 
         log.debug('Connected!  Tunnel open %r -> %r -> %r' % (self.request.getpeername(),
-                                                            chan.getpeername(), (self.chain_host, self.chain_port)))
+                                                              chan.getpeername(), (self.chain_host, self.chain_port)))
         while True:
             r, w, x = select.select([self.request, chan], [], [])
             if self.request in r:
@@ -91,15 +90,18 @@ class SSHConnection(object):
         while not connected:
             try:
                 self.ssh_connection.connect(hostname=hostname, username=username, port=port, look_for_keys=False,
-                                            password=password, timeout=2.0, banner_timeout=2.0)
+                                            password=password, timeout=2.0, banner_timeout=2.0, allow_agent=False)
                 connected = True
-            except paramiko.AuthenticationException as e:
+            except paramiko.AuthenticationException:
                 password = password_callback(self.name)
             except paramiko.SSHException as e:
-                log.error("Error logging into %s: %s" % (self.name, e.message))
-                raise
+                if str(e) == 'No authentication methods available':
+                    password = password_callback(self.name)
+                else:
+                    log.error("Error logging into %s: %s" % (self.name, str(e)))
+                    raise
             except socket.error as e:
-                log.error("Error connecting to %s: %s" % (self.name, e.message))
+                log.error("Error connecting to %s: %s" % (self.name, str(e)))
                 raise
 
         self.forwarded_connections = []
@@ -107,15 +109,15 @@ class SSHConnection(object):
         solr_forwarded_port = self.forward_tunnel('127.0.0.1', 8080)
         self.solr_url_base = 'http://127.0.0.1:%d' % solr_forwarded_port
 
-    def http_get(self, path, *args, **kwargs):
-        return self.session.get('%s%s' % (self.solr_url_base, path), *args, **kwargs)
+    def http_get(self, path, **kwargs):
+        return self.session.get('%s%s' % (self.solr_url_base, path), **kwargs)
 
     def http_post(self, path, *args, **kwargs):
         return self.session.post('%s%s' % (self.solr_url_base, path), *args, **kwargs)
 
     def forward_tunnel(self, remote_host, remote_port):
         # this is a little convoluted, but lets me configure things for the Handler
-        # object.  (SocketServer doesn't give Handlers any way to access the outer
+        # object.  (socketserver doesn't give Handlers any way to access the outer
         # server normally.)
 
         transport = self.ssh_connection.get_transport()
@@ -126,7 +128,7 @@ class SSHConnection(object):
             try:
                 conn = ForwardServer(('127.0.0.1', local_port),
                                      get_request_handler(remote_host, remote_port, transport))
-            except:
+            except Exception:
                 local_port += 1
 
         if conn:

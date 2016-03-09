@@ -4,6 +4,12 @@ Extract events from one Carbon Black server and send them to another server - us
 Note that since this tool works at the SOLR level (underneath the supported API), it does *not* support Carbon Black
 clusters at this time.
 
+Note that you may want to modify the Event Store configuration on your Carbon Black servers so that process documents
+are not purged.  See the section of the User Guide which discusses MaxEventStoreSizeInDocs, MaxEventStoreDays,
+MaxEventStoreSizeInMB and MaxEventStoreSizeInPercent.  The default value for the Event Store's retention
+policy is set MaxEventStoreDays=30.
+
+
 ## Installation Quickstart
 
 If you want to use this on a Carbon Black server, or any other CentOS 6.x, 7.x or Ubuntu based 64 bit Linux platform, 
@@ -26,6 +32,9 @@ That will place the cb-event-duplicator binary in your local user's "bin" direct
 
 ### Source Installation
 
+You must first install the postgres client via yum install postgresql-devel on CentOS/RedHat systems or
+sudo apt-get install postgresql postgresql-contrib on Ubuntu and other Debian based platforms
+
 If you want to install from source, you can install it via:
 
 ```
@@ -33,9 +42,6 @@ python setup.py install
 ```
 
 Once the package is installed, you will have a new script in your $PATH: `cb-event-duplicator`.
-
-If you want to enable the optional SSH support to transparently
-send or receive events via an SSH tunnel to another Cb server, then you will have to install the Python `paramiko` package.
 
 ## Usage
 
@@ -52,10 +58,12 @@ positional arguments:
   source                Data source - can be a pathname (/tmp/blah), a URL
                         referencing a zip package
                         (http://my.server.com/package.zip), the local Cb
-                        server (local), or a remote Cb server
+                        server (local), or a remote Cb server, omit the colon and subsequent
+                        port number to default to port 22
                         (root@cb5.server:2202)
   destination           Data destination - can be a filepath (/tmp/blah), the
-                        local Cb server (local), or a remote Cb server
+                        local Cb server (local), or a remote Cb server, omit the colon and subsequent
+                        port number to default to port 22
                         (root@cb5.server:2202)
 
 optional arguments:

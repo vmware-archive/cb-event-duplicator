@@ -1,13 +1,16 @@
-__author__ = 'jgarman'
-
+from __future__ import absolute_import, division, print_function
 import datetime
 import json
 
+__author__ = 'jgarman'
+
+
 def split_process_id(guid):
     if type(guid) == int:
-        return (guid, 1)
+        return guid, 1
 
-    return (guid[:36], guid[37:])
+    return guid[:36], guid[37:]
+
 
 def get_process_id(proc):
     old_style_id = proc.get('id', None)
@@ -19,6 +22,7 @@ def get_process_id(proc):
             return None
         return new_style_id
 
+
 def get_parent_process_id(proc):
     old_style_id = proc.get('parent_unique_id', None)
     if old_style_id and old_style_id != '':
@@ -29,6 +33,7 @@ def get_parent_process_id(proc):
             return None
         return int(new_style_id)
 
+
 def json_encode(d):
     def default(o):
         if type(o) is datetime.date or type(o) is datetime.datetime:
@@ -36,9 +41,11 @@ def json_encode(d):
 
     return json.dumps(d, default=default)
 
+
 def replace_sensor_in_guid(guid, new_id):
     # first eight characters of the GUID is the sensor ID
     return '%08x-%s' % (new_id, guid[9:])
+
 
 def update_sensor_id_refs(proc, new_id):
     # this function will mutate proc in-place
@@ -55,6 +62,7 @@ def update_sensor_id_refs(proc, new_id):
         proc['unique_id'] = new_unique_id
 
     return proc
+
 
 def update_feed_id_refs(feed_data, new_id):
     # this function will mutate feed in-place
