@@ -29,7 +29,7 @@ class Transporter(object):
 
     def output_process_doc(self, doc):
         for munger in self.mungers:
-            doc = munger.munge_document(doc)
+            doc = munger.munge_document('proc', doc)
 
         sys.stdout.write('%-70s\r' % ("Uploading process %s..." % get_process_id(doc)))
         sys.stdout.flush()
@@ -38,7 +38,7 @@ class Transporter(object):
 
     def output_feed_doc(self, doc):
         for munger in self.mungers:
-            doc = munger.munge_document(doc)
+            doc = munger.munge_document('feed', doc)
 
         # check if we have seen this feed_id before
         feed_id = doc['feed_id']
@@ -54,7 +54,7 @@ class Transporter(object):
     def output_binary_doc(self, doc):
         for munger in self.mungers:
             # note that the mungers are mutating the data in place, anyway.
-            doc = munger.munge_document(doc)
+            doc = munger.munge_document('binary', doc)
 
         sys.stdout.write('%-70s\r' % ("Uploading binary %s..." % doc['md5']))
         sys.stdout.flush()
@@ -64,7 +64,7 @@ class Transporter(object):
     def output_sensor_info(self, doc):
         for munger in self.mungers:
             # note that the mungers are mutating the data in place, anyway.
-            doc['sensor_info'] = munger.munge_document(doc['sensor_info'])
+            doc['sensor_info'] = munger.munge_document('sensor', doc['sensor_info'])
 
         self.output.output_sensor_info(doc)
 
@@ -292,7 +292,7 @@ class CleanseSolrData(object):
         pass
 
     @staticmethod
-    def munge_document(doc_content):
+    def munge_document(doc_type, doc_content):
         doc_content.pop('_version_', None)
 
         for key in doc_content.keys():
@@ -360,5 +360,5 @@ class DataAnonymizer(object):
 
         return doc
 
-    def munge_document(self, doc_content):
+    def munge_document(self, doc_type, doc_content):
         return self.anonymize(doc_content)

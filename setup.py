@@ -11,8 +11,8 @@ setup(
     description='Extract events from one Carbon Black server and send them to another server ' +
                 '- useful for demo/testing purposes',
     install_requires=[
-        'requests==2.9.1',
-        'paramiko==1.16.0',
+        'requests==2.7.0',
+        'paramiko==1.15.2',
         'psycopg2==2.6.1'
     ],
     entry_points={

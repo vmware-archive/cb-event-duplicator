@@ -86,20 +86,17 @@ class SSHConnection(object):
         self.session = requests.Session()
 
         connected = False
-        password = None
+        password = ''
         while not connected:
             try:
                 self.ssh_connection.connect(hostname=hostname, username=username, port=port, look_for_keys=False,
-                                            password=password, timeout=2.0, banner_timeout=2.0, allow_agent=False)
+                                            password=password, timeout=2.0, banner_timeout=2.0, allow_agent=True)
                 connected = True
             except paramiko.AuthenticationException:
                 password = password_callback(self.name)
             except paramiko.SSHException as e:
-                if str(e) == 'No authentication methods available':
-                    password = password_callback(self.name)
-                else:
-                    log.error("Error logging into %s: %s" % (self.name, str(e)))
-                    raise
+                log.error("Error logging into %s: %s" % (self.name, str(e)))
+                raise
             except socket.error as e:
                 log.error("Error connecting to %s: %s" % (self.name, str(e)))
                 raise
