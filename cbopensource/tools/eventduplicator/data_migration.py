@@ -1,25 +1,19 @@
-__author__ = 'jgarman'
-
+from __future__ import absolute_import, division, print_function
 import sys
 import argparse
 import re
-
-from cbopensource.tools.eventduplicator.solr_endpoint import SolrInputSource, SolrOutputSink, LocalConnection
-from cbopensource.tools.eventduplicator.transporter import Transporter, DataAnonymizer
-from cbopensource.tools.eventduplicator.file_endpoint import FileInputSource, FileOutputSink
-from cbopensource.tools.eventduplicator import main_log
-
-try:
-    from cbopensource.tools.eventduplicator.ssh_connection import SSHConnection
-    ssh_support = True
-except ImportError:
-    ssh_support = False
-
 import requests
 import tempfile
 import zipfile
 import logging
 import os.path
+from cbopensource.tools.eventduplicator.solr_endpoint import SolrInputSource, SolrOutputSink, LocalConnection
+from cbopensource.tools.eventduplicator.transporter import Transporter, DataAnonymizer
+from cbopensource.tools.eventduplicator.file_endpoint import FileInputSource, FileOutputSink
+from cbopensource.tools.eventduplicator import main_log
+from cbopensource.tools.eventduplicator.ssh_connection import SSHConnection
+
+__author__ = 'jgarman'
 
 
 def initialize_logger(verbose):
@@ -48,14 +42,11 @@ def input_from_zip(fn):
 
 
 def main():
-    if ssh_support:
-        ssh_help = ", or a remote Cb server (root@cb5.server:2202)"
-    else:
-        ssh_help = ""
-
+    ssh_help = ", or a remote Cb server (root@cb5.server:2202)"
     parser = argparse.ArgumentParser(description="Transfer data from one Cb server to another")
     parser.add_argument("source", help="Data source - can be a pathname (/tmp/blah), " +
-        "a URL referencing a zip package (http://my.server.com/package.zip), the local Cb server (local)%s" % ssh_help)
+                                       "a URL referencing a zip package" +
+                                       "(http://my.server.com/package.zip), the local Cb server (local)%s" % ssh_help)
     parser.add_argument("destination", help="Data destination - can be a filepath (/tmp/blah), " +
                                             "the local Cb server (local)%s" % ssh_help)
     parser.add_argument("-v", "--verbose", help="Increase output verbosity", action="store_true")
@@ -69,10 +60,7 @@ def main():
 
     source_parts = host_match.match(options.source)
     destination_parts = host_match.match(options.destination)
-
-    if not ssh_support and (source_parts or destination_parts):
-        sys.stderr.write("paramiko python package required for SSH support. Install via `pip install paramiko`\n")
-        return 2
+    input_source = None
 
     initialize_logger(options.verbose)
 
@@ -86,13 +74,13 @@ def main():
             response = requests.get(options.source, stream=True)
             if not response.ok:
                 raise Exception("Could not retrieve package at %s" % options.source)
-            print "Downloading package from %s..." % options.source
+            print("Downloading package from %s..." % options.source)
             for block in response.iter_content(1024):
                 handle.write(block)
 
             handle.flush()
 
-            print "Done. Unzipping..."
+            print("Done. Unzipping...")
             input_source = input_from_zip(handle.name)
     elif options.source == 'local':
         input_connection = LocalConnection()
@@ -114,7 +102,7 @@ def main():
         if os.path.isdir(options.source):
             input_source = FileInputSource(options.source)
         else:
-            print "Unzipping %s into a temporary directory for processing..." % options.source
+            print("Unzipping %s into a temporary directory for processing..." % options.source)
             input_source = input_from_zip(options.source)
 
     if type(input_source) == SolrInputSource:
@@ -144,11 +132,13 @@ def main():
     try:
         t.transport(debug=options.verbose)
     except KeyboardInterrupt:
-        print "\nMigration interrupted. Processed:"
-        print t.get_report()
+        print("\nMigration interrupted. Processed:")
+        print(t.get_report())
         return 1
 
-    print "Migration complete!"
-    print t.get_report()
+    print("Migration complete!")
+    print(t.get_report())
     return 0
 
+if __name__ == '__main__':
+    main()

@@ -36,3 +36,7 @@ nosetests.xml
 
 # IDE exclusions
 .idea
+
+# virtualenv exclusions
+.env/
+.p2env/
