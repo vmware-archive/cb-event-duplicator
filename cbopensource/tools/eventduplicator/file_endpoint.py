@@ -125,6 +125,8 @@ class FileOutputSink(object):
         self.new_metadata['feed'].append(doc_content['name'])
 
     def set_data_version(self, version):
+        if type(version) != str:
+            version = version.decode('utf8')
         open(os.path.join(self.pathname, 'VERSION'), 'w').write(version)
         return True
 
