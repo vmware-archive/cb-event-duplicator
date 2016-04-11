@@ -37,7 +37,9 @@ class SolrBase(object):
         if not self.have_cb_conf:
             self.get_cb_conf()
         re_match = re.compile("%s=([^\\n]+)" % item)
-        matches = re_match.search(self.cb_conf.decode('utf8'))
+        if type(self.cb_conf) != str:
+            self.cb_conf = self.cb_conf.decode('utf8')
+        matches = re_match.search(self.cb_conf)
 
         if matches:
             retval = matches.group(1)
@@ -294,7 +296,10 @@ class SolrOutputSink(SolrBase):
         self.now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
     def set_data_version(self, version):
-        target_version = (self.connection.open_file('/usr/share/cb/VERSION').read().strip()).decode('utf8')
+        target_version = self.connection.open_file('/usr/share/cb/VERSION').read()
+        if type(target_version) != str:
+            target_version = target_version.decode('utf8')
+        target_version = target_version.strip()
         source_major_version = '.'.join(version.split('.')[:2])
         target_major_version = '.'.join(target_version.split('.')[:2])
         if source_major_version != target_major_version:

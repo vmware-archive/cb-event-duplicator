@@ -295,7 +295,7 @@ class CleanseSolrData(object):
     def munge_document(doc_type, doc_content):
         doc_content.pop('_version_', None)
 
-        for key in doc_content.keys():
+        for key in list(doc_content):
             if key.endswith('_facet'):
                 doc_content.pop(key, None)
 

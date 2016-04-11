@@ -101,8 +101,15 @@ class FileOutputSink(object):
         pathname = os.path.join(self.pathname, 'procs', get_process_path(proc_guid))
         if os.path.exists(pathname):
             log.warning('process %s already existed, writing twice' % proc_guid)
+        self.format_date_fields(doc_content)
         open(os.path.join(self.pathname, 'procs', get_process_path(proc_guid)), 'w').write(json_encode(doc_content))
         self.written_docs['proc'] += 1
+
+    def format_date_fields(self, doc_content):
+        for date_field in ['last_update', 'start', 'server_added_timestamp', 'last_server_update']:
+            if (date_field in doc_content) and ('.' not in doc_content[date_field]):
+                # Change a date string like 2015-11-10T19:54:45Z to 2015-11-10T19:54:45.000Z
+                doc_content[date_field] = '{}.000Z'.format(doc_content[date_field][:-1])
 
     def output_binary_doc(self, doc_content):
         md5sum = doc_content.get('md5').lower()
@@ -125,6 +132,8 @@ class FileOutputSink(object):
         self.new_metadata['feed'].append(doc_content['name'])
 
     def set_data_version(self, version):
+        if type(version) != str:
+            version = version.decode('utf8')
         open(os.path.join(self.pathname, 'VERSION'), 'w').write(version)
         return True
 
