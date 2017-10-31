@@ -1,3 +1,5 @@
+# NOTE: this tool does not work with Cb Reponse 6.x or above
+
 # Event extractor/duplicator for Carbon Black
 
 Extract events from one Carbon Black server and send them to another server - useful for demo/testing purposes.
