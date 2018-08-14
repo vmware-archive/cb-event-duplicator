@@ -12,7 +12,7 @@ setup(
                 '- useful for demo/testing purposes',
     install_requires=[
         'requests==2.7.0',
-        'paramiko==1.15.2',
+        'paramiko<2.0',
         'psycopg2==2.6.1'
     ],
     entry_points={
